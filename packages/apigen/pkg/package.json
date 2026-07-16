@@ -1,6 +1,6 @@
 {
   "name": "@ilbertt/apigen",
-  "description": "",
+  "description": "WinterTC-compatible REST API handlers from your Postgres schema",
   "version": "0.0.0",
   "author": "ilbertt",
   "repository": {
@@ -11,21 +11,39 @@
   "license": "Unlicense",
   "type": "module",
   "engines": {
-    "bun": "^1.3.0",
-    "node": "please-use-bun"
+    "node": ">=18",
+    "bun": "^1.3.0"
+  },
+  "bin": {
+    "apigen": "./dist/codegen/cli/main.js"
   },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "bun": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "default": "./dist/adapters/index.js"
     }
   },
   "files": [
     "dist",
     "package.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
+  "peerDependencies": {
+    "@electric-sql/pglite": "^0.5.4"
+  },
+  "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    }
+  },
   "dependencies": {}
 }

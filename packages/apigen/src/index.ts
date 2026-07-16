@@ -1,8 +1,25 @@
-/**
- * Public entry point for `@ilbertt/apigen`.
- *
- * Placeholder — the generator's public API will live here.
- */
-export function apigen(): never {
-  throw new Error('apigen: not implemented yet');
-}
+/** biome-ignore-all lint/performance/noBarrelFile: index is the only file allowed to re-export. */
+
+export { Apigen, type ApigenOptions, Relation, relation } from './api.js';
+export type { Policy, PolicyKind, PolicyTag, UsingBag, WithCheckBag } from './builder/index.js';
+export type {
+  Adapter,
+  AuthGrant,
+  AuthResult,
+  Catalog,
+  DbInput,
+  DeleteAuthFn,
+  Filter,
+  FilterOp,
+  InsertAuthFn,
+  Op,
+  OrderTerm,
+  ParsedRequest,
+  PgType,
+  PostgresLike,
+  Query,
+  RelationColumns,
+  RelationModule,
+  SelectAuthFn,
+  UpdateAuthFn,
+} from './contract.js';

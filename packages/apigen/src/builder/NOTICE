@@ -1,0 +1,16 @@
+This directory contains a vendored, trimmed copy of `sql-template-tag`
+(https://github.com/blakeembrey/sql-template-tag), MIT-licensed by Blake Embrey.
+See ./LICENSE for the full license text.
+
+`sql.ts` is vendored — not depended on — so that the `@repo/apigen-core` runtime
+keeps zero runtime dependencies.
+
+Changes from upstream:
+  - Trimmed to the surface apigen uses: the `Sql` fragment class, the `sql` tag,
+    `join`, `raw`, and `empty`. Removed `Sql#sql` / `Sql#inspect`, `bulk`, and the
+    default export.
+  - Constructor and helper signatures take a single options object to satisfy the
+    repo's Biome `useMaxParams` rule. The param-numbering logic is unchanged.
+
+`ident.ts`, `policy.ts`, and `index.ts` in this directory are apigen's own code,
+not part of the vendored library.

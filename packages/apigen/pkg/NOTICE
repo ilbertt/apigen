@@ -1,0 +1,41 @@
+This directory contains a vendored, trimmed copy of `sql-template-tag`
+(https://github.com/blakeembrey/sql-template-tag), MIT-licensed by Blake Embrey.
+See ./LICENSE for the full license text.
+
+`sql.ts` is vendored — not depended on — so that the `@repo/apigen-core` runtime
+keeps zero runtime dependencies.
+
+Changes from upstream:
+  - Trimmed to the surface apigen uses: the `Sql` fragment class, the `sql` tag,
+    `join`, `raw`, and `empty`. Removed `Sql#sql` / `Sql#inspect`, `bulk`, and the
+    default export.
+  - Constructor and helper signatures take a single options object to satisfy the
+    repo's Biome `useMaxParams` rule. The param-numbering logic is unchanged.
+
+`ident.ts`, `policy.ts`, and `index.ts` in this directory are apigen's own code,
+not part of the vendored library.
+
+
+--- sql-template-tag (MIT) ---
+
+MIT License
+
+Copyright (c) 2016 Blake Embrey (hello@blakeembrey.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

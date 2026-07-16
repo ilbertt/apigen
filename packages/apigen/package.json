@@ -5,20 +5,43 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "bun": "./src/index.ts"
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./adapters": {
+      "types": "./src/adapters/index.ts",
+      "import": "./src/adapters/index.ts",
+      "default": "./src/adapters/index.ts"
     }
+  },
+  "bin": {
+    "apigen": "./src/codegen/cli/main.ts"
   },
   "scripts": {
     "build": "bun run build.ts",
     "build:lib": "bun run --bun tsc -p tsconfig.build.json",
-    "check:types": "bun run --bun tsc"
+    "codegen": "parsh-codegen generate --commands src/codegen/cli/commands --out src/codegen/cli/command-tree.gen.ts --eager",
+    "check:types": "bun run --bun tsc",
+    "test": "bun test"
   },
-  "imports": {
-    "#*": "./src/*"
+  "dependencies": {},
+  "peerDependencies": {
+    "@electric-sql/pglite": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@repo/pack-utils": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@electric-sql/pglite-socket": "catalog:",
+    "@parshjs/core": "catalog:",
+    "@parshjs/codegen": "catalog:",
+    "zod": "catalog:",
+    "postgres": "catalog:"
   }
 }

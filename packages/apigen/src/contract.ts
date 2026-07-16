@@ -1,0 +1,105 @@
+import type { Policy, UsingBag, WithCheckBag } from './builder/index.js';
+
+/** A composed statement: parameterized SQL text plus its bound values. */
+export interface Query {
+  readonly text: string;
+  readonly values: unknown[];
+}
+
+/**
+ * Execution-level database contract. apigen's currency is SQL text, not CRUD —
+ * an adapter only needs to run a {@link Query} and open a transaction. `db` is
+ * always a live instance the caller passes; apigen never opens a connection.
+ */
+export interface Adapter {
+  execute(query: Query): Promise<unknown[]>;
+  transaction<T>(fn: (tx: Adapter) => Promise<T>): Promise<T>;
+}
+
+/**
+ * A structural duck for postgres.js / Bun.SQL instances — loose on purpose so a
+ * real client (whose `.unsafe`/`.begin` carry narrow, overloaded generics) is
+ * assignable. The precise call signature lives inside the built-in adapter.
+ */
+export type PostgresLike = {
+  unsafe: (...args: never[]) => unknown;
+  begin: (...args: never[]) => unknown;
+};
+
+export type DbInput = Adapter | PostgresLike;
+
+/** A Postgres type name as introspected into the catalog (e.g. `int8`, `uuid`). */
+export type PgType = string;
+export type RelationColumns = Record<string, PgType>;
+/** The generated catalog: relation → column → pgType. Engine's only type source. */
+export type Catalog = Record<string, RelationColumns>;
+
+export type Op = 'select' | 'insert' | 'update' | 'delete';
+
+export const FILTER_OPS = [
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'in',
+  'is',
+  'like',
+  'ilike',
+] as const;
+export type FilterOp = (typeof FILTER_OPS)[number];
+
+export interface Filter {
+  readonly column: string;
+  readonly op: FilterOp;
+  /** Raw value from the URL for scalar/`like`/`is` ops. */
+  readonly value: string;
+  /** Present only for `in` — the parsed list members. */
+  readonly values?: readonly string[];
+}
+
+export interface OrderTerm {
+  readonly column: string;
+  readonly ascending: boolean;
+  readonly nullsFirst?: boolean;
+}
+
+/** PostgREST URL query parsed into structured form (parser → compiler contract). */
+export interface ParsedRequest {
+  /** Requested columns; `undefined` means "all visible columns". */
+  readonly select?: readonly string[];
+  readonly filters: readonly Filter[];
+  readonly order: readonly OrderTerm[];
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+export type MaybePromise<T> = T | Promise<T>;
+
+/**
+ * Authorization result. `false` denies the op (→ 403). A grant carries the RLS
+ * predicate plus the optional visible/writable column whitelist (names only —
+ * casting types come from the catalog). Omitted `allowedColumns` → all columns.
+ */
+export interface AuthGrant<Col extends string = string> {
+  readonly policy: Policy;
+  readonly allowedColumns?: readonly Col[];
+}
+export type AuthResult<Col extends string = string> = false | AuthGrant<Col>;
+
+// biome-ignore lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design.
+type AuthFn<Bag, Col extends string> = (req: Request, sql: Bag) => MaybePromise<AuthResult<Col>>;
+
+export type SelectAuthFn<Col extends string = string> = AuthFn<UsingBag, Col>;
+export type DeleteAuthFn<Col extends string = string> = AuthFn<UsingBag, Col>;
+export type UpdateAuthFn<Col extends string = string> = AuthFn<UsingBag, Col>;
+export type InsertAuthFn<Col extends string = string> = AuthFn<WithCheckBag, Col>;
+
+export type AnyAuthFn = SelectAuthFn | InsertAuthFn | UpdateAuthFn | DeleteAuthFn;
+
+/** A mounted relation: its name plus the authorization fn registered per op. */
+export interface RelationModule {
+  readonly name: string;
+  readonly handlers: Readonly<Partial<Record<Op, AnyAuthFn>>>;
+}

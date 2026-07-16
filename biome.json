@@ -92,7 +92,7 @@
       }
     },
     {
-      "includes": ["examples/**/*.ts"],
+      "includes": ["examples/**/*.ts", "**/test/**/*.ts"],
       "linter": {
         "rules": {
           "style": {
