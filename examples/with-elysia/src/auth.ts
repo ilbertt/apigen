@@ -26,5 +26,8 @@ async function resolve(req: Request): Promise<Caller | null> {
     return null;
   }
   const [row] = await db`select id from customers where api_token = ${token}`;
-  return row ? { id: row.id as string } : null;
+  if (!row) {
+    return null;
+  }
+  return { id: row.id as string };
 }
