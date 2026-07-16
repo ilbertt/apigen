@@ -28,6 +28,20 @@ Bun.serve({ fetch: app.handle });
 | --- | --- | --- |
 | [`packages/apigen`](./packages/apigen) | [`@ilbertt/apigen`](./packages/apigen/pkg/README.md) | The zero-dependency runtime (engine, builder, adapters) + the `apigen gen` codegen CLI |
 
+## Examples
+
+| Example | Stack | What it shows |
+| --- | --- | --- |
+| [`examples/simple`](./examples/simple) | Bun.SQL · Bun.serve | The core patterns on a single `todos` table — relations, per-verb policies, `allowedColumns`; no joins |
+| [`examples/with-bun`](./examples/with-bun) | Bun.SQL · Bun.serve | The ecommerce schema with Bun's built-in SQL client |
+| [`examples/with-postgres`](./examples/with-postgres) | postgres.js · Bun.serve | The ecommerce schema with postgres.js |
+| [`examples/with-elysia`](./examples/with-elysia) | Bun.SQL · Elysia | The ecommerce schema, `app.handle` mounted into an Elysia server |
+
+Each ecommerce example shows the full exposure spectrum: a public read-only catalog
+(`products`), row-scoped CRUD private to the caller (`orders` / `order_items`, the
+latter scoped through its order via a foreign-key subquery), and a table that stays
+hidden (`customers`, read only by `auth()`).
+
 ## Development
 
 Bun-workspaces monorepo (Turbo + Biome). Common tasks from the root:
