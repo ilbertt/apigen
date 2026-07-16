@@ -19,30 +19,37 @@ function ownerOf(req: Request): string | null {
 const todos = relation('todos')
   .select((req, sql) => {
     const owner = ownerOf(req);
-    return owner ? { policy: sql.using`owner = ${owner}::uuid` } : false;
+    if (!owner) {
+      return false;
+    }
+    return { policy: sql.using`owner = ${owner}::uuid` };
   })
   .insert((req, sql) => {
     const owner = ownerOf(req);
-    return owner
-      ? {
-          // On writes, allowedColumns is the writable whitelist; any other column → 403.
-          policy: sql.withCheck`owner = ${owner}::uuid`,
-          allowedColumns: ['owner', 'title', 'done', 'priority', 'notes'],
-        }
-      : false;
+    if (!owner) {
+      return false;
+    }
+    return {
+      policy: sql.withCheck`owner = ${owner}::uuid`,
+      allowedColumns: ['owner', 'title', 'done', 'priority', 'notes'],
+    };
   })
   .update((req, sql) => {
     const owner = ownerOf(req);
-    return owner
-      ? {
-          policy: sql.using`owner = ${owner}::uuid`,
-          allowedColumns: ['title', 'done', 'priority', 'notes'],
-        }
-      : false;
+    if (!owner) {
+      return false;
+    }
+    return {
+      policy: sql.using`owner = ${owner}::uuid`,
+      allowedColumns: ['title', 'done', 'priority', 'notes'],
+    };
   })
   .delete((req, sql) => {
     const owner = ownerOf(req);
-    return owner ? { policy: sql.using`owner = ${owner}::uuid` } : false;
+    if (!owner) {
+      return false;
+    }
+    return { policy: sql.using`owner = ${owner}::uuid` };
   });
 
 const app = new Apigen({ db }).use(todos);
