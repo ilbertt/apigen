@@ -1,8 +1,8 @@
 /**
- * Public entry point for `@ilbertt/bun-apigen`.
+ * Public entry point for `@ilbertt/apigen`.
  *
  * Placeholder — the generator's public API will live here.
  */
 export function apigen(): never {
-  throw new Error('bun-apigen: not implemented yet');
+  throw new Error('apigen: not implemented yet');
 }

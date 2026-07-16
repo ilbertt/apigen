@@ -7,7 +7,7 @@ if (!version) {
   throw new Error('usage: bun src/set-version.ts <version>');
 }
 
-const PACKAGE_JSON_PATH = join(REPO_ROOT, 'packages/bun-apigen/pkg/package.json');
+const PACKAGE_JSON_PATH = join(REPO_ROOT, 'packages/apigen/pkg/package.json');
 
 const pkg = await Bun.file(PACKAGE_JSON_PATH).json();
 pkg.version = version;

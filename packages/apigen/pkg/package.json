@@ -1,12 +1,12 @@
 {
-  "name": "@ilbertt/bun-apigen",
+  "name": "@ilbertt/apigen",
   "description": "",
   "version": "0.0.0",
   "author": "ilbertt",
   "repository": {
     "type": "git",
     "url": "https://github.com/ilbertt/bun-apigen",
-    "directory": "packages/bun-apigen"
+    "directory": "packages/apigen"
   },
   "license": "Unlicense",
   "type": "module",

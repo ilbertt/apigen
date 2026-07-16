@@ -46,7 +46,7 @@ jobs:
           RELEASE_BRANCH: release/v${{ steps.version.outputs.version }}
         run: |
           git switch -c "$RELEASE_BRANCH"
-          git add packages/bun-apigen/pkg/package.json CHANGELOG.md
+          git add packages/apigen/pkg/package.json CHANGELOG.md
           git commit -m "chore(release): v${VERSION}"
           git push --set-upstream origin "$RELEASE_BRANCH"
 

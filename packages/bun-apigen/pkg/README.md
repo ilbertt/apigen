@@ -1,1 +1,0 @@
-# @ilbertt/bun-apigen

@@ -1,6 +1,6 @@
 ## Project
 
-Bun + TypeScript monorepo for `@ilbertt/bun-apigen` (`packages/*`, `examples/*`).
+Bun + TypeScript monorepo for `@ilbertt/apigen` (`packages/*`, `examples/*`).
 
 ## Stack
 
@@ -48,12 +48,12 @@ The root `README.md` is the project homepage: typically lists the public package
 
 Releases are automated and driven by Conventional Commits:
 
-- **`prepare-release`** workflow (manual dispatch) computes the next version with git-cliff, writes it to `packages/bun-apigen/pkg/package.json`, regenerates `CHANGELOG.md`, and opens a release PR.
-- **`publish`** workflow runs on `v*` tag push: builds and publishes `@ilbertt/bun-apigen` to npm (Trusted Publishing / provenance) and creates a GitHub Release.
+- **`prepare-release`** workflow (manual dispatch) computes the next version with git-cliff, writes it to `packages/apigen/pkg/package.json`, regenerates `CHANGELOG.md`, and opens a release PR.
+- **`publish`** workflow runs on `v*` tag push: builds and publishes `@ilbertt/apigen` to npm (Trusted Publishing / provenance) and creates a GitHub Release.
 
 ## Bun version
 
-The Bun version is pinned in `.bun-version`. When bumping it, also update `engines.bun` in `packages/bun-apigen/pkg/package.json` so the published package advertises the matching minimum.
+The Bun version is pinned in `.bun-version`. When bumping it, also update `engines.bun` in `packages/apigen/pkg/package.json` so the published package advertises the matching minimum.
 
 ## Pull requests
 

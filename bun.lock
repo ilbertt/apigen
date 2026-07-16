@@ -15,8 +15,8 @@
         "typescript": "catalog:",
       },
     },
-    "packages/bun-apigen": {
-      "name": "@repo/bun-apigen",
+    "packages/apigen": {
+      "name": "@repo/apigen",
       "devDependencies": {
         "@repo/pack-utils": "workspace:*",
         "@repo/typescript-config": "workspace:*",
@@ -109,7 +109,7 @@
 
     "@conventional-changelog/template": ["@conventional-changelog/template@1.2.1", "", {}, "sha512-TzlTVpKPjaqW6qOYjQcYUDuGsLCNsvFHVBXkYGTAnf5V37jCWrE5haKNXzz0WZUtVHjrpV76L1buANjwXMfT8w=="],
 
-    "@repo/bun-apigen": ["@repo/bun-apigen@workspace:packages/bun-apigen"],
+    "@repo/apigen": ["@repo/apigen@workspace:packages/apigen"],
 
     "@repo/internal-scripts": ["@repo/internal-scripts@workspace:packages/internal-scripts"],
 
