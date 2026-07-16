@@ -1,5 +1,5 @@
 {
-  "name": "bun-apigen-monorepo",
+  "name": "apigen-monorepo",
   "type": "module",
   "private": true,
   "scripts": {

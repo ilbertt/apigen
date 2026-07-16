@@ -1,10 +1,10 @@
-# Contributing to bun-apigen
+# Contributing to apigen
 
 ## Development setup
 
 ```bash
-git clone https://github.com/ilbertt/bun-apigen
-cd bun-apigen
+git clone https://github.com/ilbertt/apigen
+cd apigen
 bun install
 bun run build
 ```

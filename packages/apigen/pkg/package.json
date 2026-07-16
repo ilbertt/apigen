@@ -5,7 +5,7 @@
   "author": "ilbertt",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ilbertt/bun-apigen",
+    "url": "https://github.com/ilbertt/apigen",
     "directory": "packages/apigen"
   },
   "license": "Unlicense",
