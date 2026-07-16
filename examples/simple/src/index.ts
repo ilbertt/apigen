@@ -3,19 +3,12 @@
 import { SQL } from 'bun';
 import { Apigen, relation } from './api.gen.ts';
 
-// Hard-coded for the example — point this at your Postgres.
 const db = new SQL('postgres://postgres:postgres@localhost:5432/apigen');
 
-// The "user" is whatever uuid the caller sends in x-owner-id. A real app resolves
-// a session or token here (see the ecommerce examples); todos keeps auth to one
-// line so the focus stays on the relation/policy patterns.
 function ownerOf(req: Request): string | null {
   return req.headers.get('x-owner-id');
 }
 
-// A relation module registers one authorization fn per verb. Each returns a policy
-// (compiled to USING / WITH CHECK) or `false` to deny (403). An *omitted* verb is
-// denied too — here all four are present.
 const todos = relation('todos')
   .select((req, sql) => {
     const owner = ownerOf(req);
