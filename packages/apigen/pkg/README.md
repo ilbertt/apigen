@@ -2,18 +2,18 @@
 
 > WinterTC-compatible REST API handlers from your Postgres schema
 
-apigen writes the CRUD; **you write the auth**. For each relation + operation you
-declare an RLS-style policy (`USING` / `WITH CHECK`) as a SQL fragment. Requests
-become PostgREST-style queries, composed as parameterized SQL and run against a
-database instance you pass in.
+apigen writes the CRUD; you write the auth. You choose which relations and columns
+to expose and authorize each operation in code — a SQL `USING` / `WITH CHECK`
+policy, plus optional hooks. Requests become PostgREST-style queries, compiled to
+parameterized SQL and run against a database you pass in.
 
-- **Runtime-agnostic.** `app.handle(req)` is a `(Request) => Promise<Response>`
-  built on Web-standard globals — mount it into any [WinterTC](https://wintertc.org/)
-  server on Bun, Node ≥18, or Deno. No server is bundled.
-- **You own the connection.** apigen never opens a connection or takes a
-  connection string — you pass a live `db` (postgres.js, Bun.SQL, or an adapter).
-- **Zero runtime dependencies.** SQL is composed with a vendored, trimmed copy of
-  `sql-template-tag`; request values only ever reach the database as bound params.
+- **Runtime-agnostic.** `app.handle` is a `(Request) => Promise<Response>` on
+  Web-standard globals; mount it into any [WinterTC](https://wintertc.org/) server
+  (Bun, Node ≥18, Deno). No server is bundled.
+- **You own the connection.** apigen never opens one or takes a connection string —
+  you pass a live `db` (postgres.js, Bun.SQL, or an adapter).
+- **Zero runtime dependencies.** SQL is built with a vendored copy of
+  `sql-template-tag`; request values reach the database only as bound params.
 
 ## Install
 
@@ -38,17 +38,17 @@ create table orders (
 );
 ```
 
-**2. Generate the typed client** — introspects your schema into `api.gen.ts`:
+**2. Generate the typed client:**
 
 ```sh
 bunx apigen gen --migrations ./migrations --out ./api.gen.ts
 ```
 
-`api.gen.ts` is a committed file containing the `catalog` (relation → column →
-pgType), per-relation row types, and a catalog-bound `Apigen` class and
-`relation` factory. Nothing about authorization is generated.
+`api.gen.ts` is a committed file: the `catalog` (relation → column → pgType), row
+types, and a catalog-bound `Apigen` and `relation`. Authorization is your code, not
+generated.
 
-**3. Write your policies** — a relation is a `.use()`-able module:
+**3. Write your policies.** A relation is a `.use()`-able module:
 
 ```ts
 // orders.ts
@@ -73,10 +73,10 @@ export const orders = relation('orders')
       };
     },
   });
-// omitted verbs (.update / .delete) → those operations are denied
+// unregistered verbs (.update / .delete) are denied
 ```
 
-**4. Mount and serve** — wire `app.handle` into whatever server you run:
+**4. Mount and serve:**
 
 ```ts
 import postgres from 'postgres';
@@ -97,60 +97,49 @@ curl 'http://localhost:3000/orders?status=eq.paid&order=amount.desc&limit=10' \
 
 ## Authorization
 
-Each verb takes an operation-config object:
+Each verb takes a config object:
 
 ```ts
 .select({ authorization?, beforeExecute?, afterExecute? })
 ```
 
-`authorization` is the same function as before and is now **optional** — omitting
-it exposes that op **publicly** (policy `USING true`, all columns). When present it
-has the shape:
+`authorization` decides who may run the operation and on which rows. Omit it and the
+operation is public (`USING true`, every column). When present:
 
 ```ts
-(req: Request, ctx: { sql }) => false | { policy; allowedColumns? }
+(req, { sql }) => false | { policy, allowedColumns? }
 ```
 
-- **`req`** — the raw `Request`. The context carries no resolved user; write your own
-  auth helper and memoize it on the `Request` (via a `WeakMap`) so it runs once.
-- **`ctx`** — a context object; destructure what you need (`(req, { sql }) => …`).
-  It exposes `sql` today and is where op-scoped tools will be added over time.
-- **`sql`** — an op-appropriate clause builder. `` sql.using`…` `` on
-  select/update/delete; `` sql.withCheck`…` `` on insert. The wrong one is a type
-  error. Interpolated `${values}` become **bound params**; the predicate is
-  trusted author SQL and may use subqueries / `EXISTS` / `IN`.
-- **`policy`** — compiles to `USING (…)` (which existing rows the op may touch)
-  or `WITH CHECK (…)` (validates the new/modified row). On `update`, `withCheck`
-  defaults to `using`, so a row can't be moved out of your scope.
-- **`allowedColumns`** — column **names** only (casting types come from the
-  catalog). On reads it's the visible whitelist for `?select=` and filters; on
-  writes it's the writable whitelist. Omitted → all columns. A request naming any
-  other column → **403**.
-- Returning **`false`** denies the operation (**403**). The function may be
-  `async` — coarse gates can `return false` after calling your services.
+- `req` — the raw request. There is no resolved user; call your own auth helper.
+  Memoize it on the `Request` (e.g. a `WeakMap`) if you want it to run once.
+- `sql` — the clause builder for this op: `sql.using` on select/update/delete,
+  `sql.withCheck` on insert. The wrong one is a type error. `${values}` are bound
+  params; the rest of the fragment is trusted SQL, so subqueries and `EXISTS` work.
+- `policy` — a `USING` predicate (which rows the op may touch) or `WITH CHECK`
+  (which rows a write may produce). On update, `withCheck` defaults to `using`, so a
+  write can't move a row out of scope.
+- `allowedColumns` — column names, defaulting to all. The visible set for `?select=`
+  and filters on reads; the writable set on writes. Any other column is a 403.
+- `false` — denies the operation (403). The function may be async.
 
-Reads and deletes **filter silently** (out-of-scope rows are simply invisible);
-writes **reject** rows that fail `WITH CHECK`.
+Reads and deletes filter silently — out-of-scope rows are invisible. Writes reject
+rows that fail `WITH CHECK`.
 
 ### Hooks
 
-Two optional per-op hooks, each taking a single object arg:
+`beforeExecute` and `afterExecute` are optional per-op hooks, each taking one object:
 
-- **`beforeExecute`** — `({ req, op, relation }) => void` (may be `async`). Runs
-  once the op is routed, **before** the query. For logging/observability.
-- **`afterExecute`** — `({ req, op, relation, response }) => Response`. Runs only on
-  a **successful** response and **must return** a `Response` (the same one mutated,
-  or a new one). It does **not** receive rows.
+- `beforeExecute({ req, op, relation })` — runs after routing, before the query.
+  Returns nothing; use it for logging or metrics. May be async.
+- `afterExecute({ req, op, relation, response })` — runs on a successful response and
+  returns the `Response` to send, mutated or replaced. It does not see rows.
 
 ```ts
-import { relation } from '../api.gen.ts';
+import { relation } from './api.gen';
 
 export const products = relation('products').select({
   beforeExecute: ({ op, relation }) => {
-    void fetch('https://o11y.example/ingest', {
-      method: 'POST',
-      body: JSON.stringify({ op, relation }),
-    }).catch(() => {});
+    console.log(`Handling ${op} on ${relation}`);
   },
   afterExecute: ({ relation, response }) => {
     response.headers.set('x-apigen-relation', relation);
@@ -161,25 +150,23 @@ export const products = relation('products').select({
 
 ## Query parameters (PostgREST subset)
 
-`select`, filters `eq neq gt gte lt lte in is like ilike`, `order` (with
-`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast
-to the column's catalog type; an invalid value (e.g. text where an `int8` is
-expected) is a **400**, never executed as SQL. `int8` / `numeric` are surfaced as
-strings.
+`select`, the filters `eq neq gt gte lt lte in is like ilike`, `order`
+(`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast
+to the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a
+400 and never reaches the database. `int8` and `numeric` come back as strings.
 
-Method → operation: `GET` → select, `POST` → insert, `PATCH` → update,
-`DELETE` → delete.
+Method → operation: `GET` select, `POST` insert, `PATCH` update, `DELETE` delete.
 
 ## Database
 
-Pass a **live** instance — never a connection string:
+Pass a live instance, not a connection string:
 
 ```ts
-new Apigen({ db: sql });        // postgres.js or Bun.SQL — auto-detected by shape
+new Apigen({ db: sql });        // postgres.js or Bun.SQL, detected by shape
 new Apigen({ db: myAdapter });  // an Adapter from createAdapter()
 ```
 
-The adapter contract is execution-level:
+The adapter contract is just execution:
 
 ```ts
 interface Adapter {
@@ -188,9 +175,9 @@ interface Adapter {
 }
 ```
 
-`createAdapter` and the built-in postgres.js/Bun.SQL adapter are available from
-`@ilbertt/apigen/adapters`. One transaction runs per request. Because the
-database needs TCP, apigen runs on server runtimes (not edge/Workers).
+`createAdapter` and the built-in postgres.js/Bun.SQL adapter live in
+`@ilbertt/apigen/adapters`. Each request runs in one transaction. The database
+speaks TCP, so apigen runs on server runtimes, not edge/Workers.
 
 ## CLI
 
