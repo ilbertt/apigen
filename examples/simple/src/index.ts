@@ -10,39 +10,57 @@ function ownerOf(req: Request): string | null {
 }
 
 const todos = relation('todos')
-  .select((req, { sql }) => {
-    const owner = ownerOf(req);
-    if (!owner) {
-      return false;
-    }
-    return { policy: sql.using`owner = ${owner}::uuid` };
+  .select({
+    authorization: (req, { sql }) => {
+      const owner = ownerOf(req);
+      if (!owner) {
+        return false;
+      }
+      return { policy: sql.using`owner = ${owner}::uuid` };
+    },
+    beforeExecute: ({ op, relation }) => {
+      void fetch('https://o11y.example/ingest', {
+        method: 'POST',
+        body: JSON.stringify({ op, relation }),
+      }).catch(() => {});
+    },
+    afterExecute: ({ relation, response }) => {
+      response.headers.set('x-apigen-relation', relation);
+      return response;
+    },
   })
-  .insert((req, { sql }) => {
-    const owner = ownerOf(req);
-    if (!owner) {
-      return false;
-    }
-    return {
-      policy: sql.withCheck`owner = ${owner}::uuid`,
-      allowedColumns: ['owner', 'title', 'done', 'priority', 'notes'],
-    };
+  .insert({
+    authorization: (req, { sql }) => {
+      const owner = ownerOf(req);
+      if (!owner) {
+        return false;
+      }
+      return {
+        policy: sql.withCheck`owner = ${owner}::uuid`,
+        allowedColumns: ['owner', 'title', 'done', 'priority', 'notes'],
+      };
+    },
   })
-  .update((req, { sql }) => {
-    const owner = ownerOf(req);
-    if (!owner) {
-      return false;
-    }
-    return {
-      policy: sql.using`owner = ${owner}::uuid`,
-      allowedColumns: ['title', 'done', 'priority', 'notes'],
-    };
+  .update({
+    authorization: (req, { sql }) => {
+      const owner = ownerOf(req);
+      if (!owner) {
+        return false;
+      }
+      return {
+        policy: sql.using`owner = ${owner}::uuid`,
+        allowedColumns: ['title', 'done', 'priority', 'notes'],
+      };
+    },
   })
-  .delete((req, { sql }) => {
-    const owner = ownerOf(req);
-    if (!owner) {
-      return false;
-    }
-    return { policy: sql.using`owner = ${owner}::uuid` };
+  .delete({
+    authorization: (req, { sql }) => {
+      const owner = ownerOf(req);
+      if (!owner) {
+        return false;
+      }
+      return { policy: sql.using`owner = ${owner}::uuid` };
+    },
   });
 
 const app = new Apigen({ db }).use(todos);

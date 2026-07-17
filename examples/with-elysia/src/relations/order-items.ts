@@ -7,54 +7,62 @@ import { auth } from '../auth.ts';
 // its order. Each policy reaches the owner with an EXISTS subquery over `orders`:
 // authorization that follows a foreign key.
 export const orderItems = relation('order_items')
-  .select(async (req, { sql }) => {
-    const caller = await auth(req);
-    if (!caller) {
-      return false;
-    }
-    return {
-      policy: sql.using`exists (
+  .select({
+    authorization: async (req, { sql }) => {
+      const caller = await auth(req);
+      if (!caller) {
+        return false;
+      }
+      return {
+        policy: sql.using`exists (
         select 1 from orders o
         where o.id = order_items.order_id and o.customer_id = ${caller.id}::uuid
       )`,
-    };
+      };
+    },
   })
-  .insert(async (req, { sql }) => {
-    const caller = await auth(req);
-    if (!caller) {
-      return false;
-    }
-    // In WITH CHECK on insert, `order_id` refers to the row being inserted.
-    return {
-      policy: sql.withCheck`exists (
+  .insert({
+    authorization: async (req, { sql }) => {
+      const caller = await auth(req);
+      if (!caller) {
+        return false;
+      }
+      // In WITH CHECK on insert, `order_id` refers to the row being inserted.
+      return {
+        policy: sql.withCheck`exists (
         select 1 from orders o
         where o.id = order_id and o.customer_id = ${caller.id}::uuid
       )`,
-      allowedColumns: ['order_id', 'product_id', 'quantity', 'unit_price'],
-    };
+        allowedColumns: ['order_id', 'product_id', 'quantity', 'unit_price'],
+      };
+    },
   })
-  .update(async (req, { sql }) => {
-    const caller = await auth(req);
-    if (!caller) {
-      return false;
-    }
-    return {
-      policy: sql.using`exists (
+  .update({
+    authorization: async (req, { sql }) => {
+      const caller = await auth(req);
+      if (!caller) {
+        return false;
+      }
+      return {
+        policy: sql.using`exists (
         select 1 from orders o
         where o.id = order_items.order_id and o.customer_id = ${caller.id}::uuid
       )`,
-      allowedColumns: ['quantity', 'unit_price'],
-    };
+        allowedColumns: ['quantity', 'unit_price'],
+      };
+    },
   })
-  .delete(async (req, { sql }) => {
-    const caller = await auth(req);
-    if (!caller) {
-      return false;
-    }
-    return {
-      policy: sql.using`exists (
+  .delete({
+    authorization: async (req, { sql }) => {
+      const caller = await auth(req);
+      if (!caller) {
+        return false;
+      }
+      return {
+        policy: sql.using`exists (
         select 1 from orders o
         where o.id = order_items.order_id and o.customer_id = ${caller.id}::uuid
       )`,
-    };
+      };
+    },
   });
