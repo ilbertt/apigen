@@ -34,6 +34,11 @@ export type RelationColumns = Record<string, PgType>;
 /** The generated catalog: relation → column → pgType. Engine's only type source. */
 export type Catalog = Record<string, RelationColumns>;
 
+/** A callable function's named arguments → pgType, for casting the request's args. */
+export type FunctionArgs = Record<string, PgType>;
+/** The generated function catalog: function name → its argument types. */
+export type FunctionCatalog = Record<string, FunctionArgs>;
+
 export type Op = 'select' | 'insert' | 'update' | 'delete';
 
 export const FILTER_OPS = [
@@ -153,4 +158,46 @@ export type AnyOperationConfig = OperationConfig<AnyAuthFn>;
 export interface RelationModule {
   readonly name: string;
   readonly handlers: Readonly<Partial<Record<Op, AnyOperationConfig>>>;
+}
+
+/**
+ * Authorization for a callable function. A function has no rows or columns, so the
+ * gate is coarse: `true` allows the call, `false` denies it (→ 403). May be async.
+ */
+export type FunctionAuthFn = (req: Request) => MaybePromise<boolean>;
+
+/** Lifecycle context passed to a function's `beforeExecute`, before the call runs. */
+export interface FunctionExecuteContext {
+  readonly req: Request;
+  readonly functionName: string;
+}
+
+/** Lifecycle context passed to a function's `afterExecute`: the built {@link Response}. */
+export interface FunctionResponseContext extends FunctionExecuteContext {
+  readonly response: Response;
+}
+
+/** Side-effect hook run once a function call is routed, before it executes. */
+export type FunctionBeforeExecute = (ctx: FunctionExecuteContext) => MaybePromise<void>;
+
+/** Hook run on a successful function response — return the (possibly modified) {@link Response}. */
+export type FunctionAfterExecute = (ctx: FunctionResponseContext) => MaybePromise<Response>;
+
+/**
+ * Configuration for an exposed function. `authorization` gates the call; omit it to
+ * expose the function publicly. `beforeExecute`/`afterExecute` are optional taps.
+ */
+export interface FunctionConfig {
+  readonly authorization?: FunctionAuthFn;
+  readonly beforeExecute?: FunctionBeforeExecute;
+  readonly afterExecute?: FunctionAfterExecute;
+}
+
+/**
+ * A mounted function. `config` is registered by `.execute(...)`; while it is
+ * `undefined` the function is not yet exposed and any call is denied.
+ */
+export interface FunctionModule {
+  readonly name: string;
+  readonly config?: Readonly<FunctionConfig>;
 }

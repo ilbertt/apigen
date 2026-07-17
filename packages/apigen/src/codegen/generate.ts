@@ -1,7 +1,7 @@
 import { resolveAdapter } from '../adapters/resolve.js';
 import type { DbInput } from '../contract.js';
 import { emit } from './emit.js';
-import { introspect } from './introspect.js';
+import { introspect, introspectFunctions, type RunQuery } from './introspect.js';
 
 /**
  * Load PGlite lazily so codegen fails with a clear message — not an opaque module
@@ -33,8 +33,10 @@ export async function generateFromSql({
   const db = await PGlite.create();
   try {
     await db.exec(migrations);
-    const introspection = await introspect(async (sql) => (await db.query(sql)).rows);
-    return emit({ introspection, moduleSpecifier });
+    const run: RunQuery = async (sql) => (await db.query(sql)).rows;
+    const introspection = await introspect(run);
+    const functions = await introspectFunctions(run);
+    return emit({ introspection, functions, moduleSpecifier });
   } finally {
     await db.close();
   }
@@ -52,6 +54,8 @@ export async function generateFromDb({
   moduleSpecifier?: string;
 }): Promise<string> {
   const adapter = resolveAdapter(db);
-  const introspection = await introspect((sql) => adapter.execute({ text: sql, values: [] }));
-  return emit({ introspection, moduleSpecifier });
+  const run: RunQuery = (sql) => adapter.execute({ text: sql, values: [] });
+  const introspection = await introspect(run);
+  const functions = await introspectFunctions(run);
+  return emit({ introspection, functions, moduleSpecifier });
 }

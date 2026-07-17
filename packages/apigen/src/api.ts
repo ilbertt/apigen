@@ -5,6 +5,9 @@ import type {
   Catalog,
   DbInput,
   DeleteConfig,
+  FunctionCatalog,
+  FunctionConfig,
+  FunctionModule,
   InsertConfig,
   Op,
   RelationModule,
@@ -52,9 +55,33 @@ export function relation<Col extends string = string>(name: string): Relation<Co
   return new Relation<Col>(name);
 }
 
+/**
+ * A `.use()`-able function module. `.execute(config)` opts the function in and
+ * registers its {@link FunctionConfig} (`authorization` plus optional hooks); an
+ * unregistered function denies every call. A function call is `POST /rpc/<name>`.
+ */
+export class Func implements FunctionModule {
+  readonly name: string;
+  config?: FunctionConfig;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  execute(config: FunctionConfig = {}): this {
+    this.config = config;
+    return this;
+  }
+}
+
+export function func(name: string): Func {
+  return new Func(name);
+}
+
 export interface ApigenOptions {
   db: DbInput;
   catalog: Catalog;
+  functions?: FunctionCatalog;
 }
 
 /**
@@ -65,15 +92,22 @@ export interface ApigenOptions {
 export class Apigen {
   readonly #adapter: Adapter;
   readonly #catalog: Catalog;
+  readonly #functionCatalog: FunctionCatalog;
   readonly #modules = new Map<string, RelationModule>();
+  readonly #functions = new Map<string, FunctionModule>();
 
   constructor(options: ApigenOptions) {
     this.#adapter = resolveAdapter(options.db);
     this.#catalog = options.catalog;
+    this.#functionCatalog = options.functions ?? {};
   }
 
-  use(relation: RelationModule): this {
-    this.#modules.set(relation.name, relation);
+  use(module: RelationModule | FunctionModule): this {
+    if ('handlers' in module) {
+      this.#modules.set(module.name, module);
+    } else {
+      this.#functions.set(module.name, module);
+    }
     return this;
   }
 
@@ -81,7 +115,9 @@ export class Apigen {
     handleRequest({
       req,
       catalog: this.#catalog,
+      functionCatalog: this.#functionCatalog,
       modules: this.#modules,
+      functions: this.#functions,
       adapter: this.#adapter,
     });
 }
