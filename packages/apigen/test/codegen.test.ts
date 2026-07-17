@@ -2,7 +2,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { generateFromSql } from '../src/codegen/generate.js';
+import { generateFromDb, generateFromSql } from '../src/codegen/generate.js';
 import { createTestDb, type TestDb } from './helpers/db.js';
 
 const MIGRATIONS = `
@@ -70,6 +70,16 @@ test('the generated module works end-to-end against a live db', async () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ title: 'ship it', priority: 2, done: false });
     expect(typeof rows[0]?.id).toBe('string');
+  } finally {
+    await db.end();
+  }
+});
+
+test('generateFromDb introspects a live connection, matching the migrations path', async () => {
+  const db = await createTestDb({ migrations: MIGRATIONS });
+  try {
+    const fromDb = await generateFromDb({ db: db.sql, moduleSpecifier: '@repo/apigen' });
+    expect(fromDb).toBe(source);
   } finally {
     await db.end();
   }

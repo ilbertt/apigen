@@ -19,36 +19,29 @@ parameterized SQL and run against a database you pass in.
 
 ```sh
 bun add @ilbertt/apigen
-# codegen (dev only) also needs PGlite:
-bun add -d @electric-sql/pglite
 ```
 
 ## Quick start
 
-**1. Write your schema as migrations** (`migrations/*.sql`, applied in filename order):
-
-```sql
--- migrations/001_init.sql
-create table orders (
-  id bigint generated always as identity primary key,
-  org_id uuid not null,
-  customer text not null,
-  amount numeric(12, 2) not null default 0,
-  status text not null default 'pending'
-);
-```
-
-**2. Generate the typed client:**
+**1. Generate the typed client** — point apigen at your running database:
 
 ```sh
-bunx apigen gen --migrations ./migrations --out ./api.gen.ts
+bunx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api.gen.ts
 ```
+
+> No running database? Generate from SQL migrations instead (needs the
+> `@electric-sql/pglite` dev dependency):
+>
+> ```sh
+> bun add -d @electric-sql/pglite
+> bunx apigen gen --migrations ./migrations --out ./api.gen.ts
+> ```
 
 `api.gen.ts` is a committed file: the `catalog` (relation → column → pgType), row
 types, and a catalog-bound `Apigen` and `relation`. Authorization is your code, not
 generated.
 
-**3. Write your policies.** A relation is a `.use()`-able module:
+**2. Write your policies.** A relation is a `.use()`-able module:
 
 ```ts
 // orders.ts
@@ -76,7 +69,7 @@ export const orders = relation('orders')
 // unregistered verbs (.update / .delete) are denied
 ```
 
-**4. Mount and serve:**
+**3. Mount and serve:**
 
 ```ts
 import postgres from 'postgres';
@@ -212,11 +205,12 @@ speaks TCP, so apigen runs on server runtimes, not edge/Workers.
 
 ## CLI
 
-```
-apigen gen [--migrations <dir>] [--out <file>] [--module <specifier>]
-  -m, --migrations   Directory of *.sql migrations (default: ./migrations)
-  -o, --out          Output file (default: ./api.gen.ts)
-  -s, --module       Runtime import specifier (default: @ilbertt/apigen)
+`apigen gen` writes `api.gen.ts` from either a running Postgres (`--database-url`)
+or SQL migrations (`--migrations`, which needs `@electric-sql/pglite`). Run it with
+`--help` for the current flags:
+
+```sh
+bunx apigen gen --help
 ```
 
 ## Not included (yet)

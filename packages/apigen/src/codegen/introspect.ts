@@ -1,5 +1,3 @@
-import type { PGlite } from '@electric-sql/pglite';
-
 export interface IntrospectedColumn {
   name: string;
   pgType: string;
@@ -22,6 +20,9 @@ export interface IntrospectedFunction {
 
 /** function name → its introspected signature. */
 export type FunctionIntrospection = Record<string, IntrospectedFunction>;
+
+/** Runs a read-only SQL string and returns the result rows. Any pg source fits. */
+export type RunQuery = (sql: string) => Promise<unknown[]>;
 
 const COLUMNS_QUERY = `
   select table_name, column_name, udt_name, is_nullable
@@ -65,10 +66,10 @@ interface FunctionRow {
   arg_type: string | null;
 }
 
-export async function introspect(db: PGlite): Promise<Introspection> {
-  const result = await db.query<ColumnRow>(COLUMNS_QUERY);
+export async function introspect(run: RunQuery): Promise<Introspection> {
+  const rows = (await run(COLUMNS_QUERY)) as ColumnRow[];
   const relations: Introspection = {};
-  for (const row of result.rows) {
+  for (const row of rows) {
     const columns = relations[row.table_name] ?? [];
     relations[row.table_name] = columns;
     columns.push({
@@ -80,11 +81,11 @@ export async function introspect(db: PGlite): Promise<Introspection> {
   return relations;
 }
 
-export async function introspectFunctions(db: PGlite): Promise<FunctionIntrospection> {
-  const result = await db.query<FunctionRow>(FUNCTIONS_QUERY);
+export async function introspectFunctions(run: RunQuery): Promise<FunctionIntrospection> {
+  const rows = (await run(FUNCTIONS_QUERY)) as FunctionRow[];
   const functions: FunctionIntrospection = {};
   const chosenOverload: Record<string, string> = {};
-  for (const row of result.rows) {
+  for (const row of rows) {
     const existing = functions[row.function_name];
     if (existing === undefined) {
       functions[row.function_name] = { name: row.function_name, args: [] };
