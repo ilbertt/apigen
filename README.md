@@ -66,19 +66,16 @@ import { Apigen, relation } from './api.gen';
 const db = postgres('postgres://...');
 
 // A public, read-only catalog — no authorization needed.
-// beforeExecute logs to observability; afterExecute stamps a response header.
-const products = relation('products').select({
-  beforeExecute: ({ op, relation }) => {
-    void fetch('https://o11y.example/ingest', {
-      method: 'POST',
-      body: JSON.stringify({ op, relation }),
-    }).catch(() => {});
-  },
-  afterExecute: ({ relation, response }) => {
-    response.headers.set('x-apigen-relation', relation);
-    return response;
-  },
-});
+const products = relation('products')
+  .select({
+    beforeExecute: ({ op, relation }) => {
+      console.log(`Handling ${op} on ${relation}`)
+    },
+    afterExecute: ({ relation, response }) => {
+      response.headers.set('x-apigen-relation', relation);
+      return response;
+    },
+  });
 
 // Private: every request is scoped to the caller's org.
 const orders = relation('orders')
@@ -87,6 +84,12 @@ const orders = relation('orders')
       const user = await auth(req); // your own auth helper
       if (!user) return false; // 403
       return { policy: sql.using`org_id = ${user.orgId}::uuid` };
+    },
+    beforeExecute: () => {
+      console.log(`Selecting orders...`)
+    },
+    afterExecute: () => {
+      console.log(`Selected orders!`)
     },
   })
   .insert({
@@ -99,7 +102,7 @@ const orders = relation('orders')
       };
     },
   });
-// no .update / .delete → those verbs return 403
+// no .update / .delete → those operations return 403
 
 const app = new Apigen({ db }).use(products).use(orders);
 
