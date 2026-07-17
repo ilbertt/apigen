@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design. */
+/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { Apigen, relation } from '../src/index.js';
@@ -13,38 +13,38 @@ function orgOf(req: Request): string | false {
 
 function buildApp(sql: Sql): Apigen {
   const orders = relation('orders')
-    .select((req, s) => {
+    .select((req, { sql }) => {
       const org = orgOf(req);
-      return org === false ? false : { policy: s.using`org_id = ${org}::uuid` };
+      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid` };
     })
-    .insert((req, s) => {
+    .insert((req, { sql }) => {
       const org = orgOf(req);
       return org === false
         ? false
         : {
-            policy: s.withCheck`org_id = ${org}::uuid`,
+            policy: sql.withCheck`org_id = ${org}::uuid`,
             allowedColumns: ['org_id', 'customer', 'amount', 'status', 'paid'],
           };
     })
-    .update((req, s) => {
+    .update((req, { sql }) => {
       const org = orgOf(req);
       return org === false
         ? false
         : {
-            policy: s.using`org_id = ${org}::uuid`,
+            policy: sql.using`org_id = ${org}::uuid`,
             allowedColumns: ['org_id', 'customer', 'amount', 'status', 'paid'],
           };
     })
-    .delete((req, s) => {
+    .delete((req, { sql }) => {
       const org = orgOf(req);
-      return org === false ? false : { policy: s.using`org_id = ${org}::uuid` };
+      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid` };
     });
 
-  const orderItems = relation('order_items').select((req, s) => {
+  const orderItems = relation('order_items').select((req, { sql }) => {
     const org = orgOf(req);
     return org === false
       ? false
-      : { policy: s.using`org_id = ${org}::uuid`, allowedColumns: ['id', 'sku', 'qty'] };
+      : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns: ['id', 'sku', 'qty'] };
   });
 
   return new Apigen({ db: sql, catalog: FIXTURE_CATALOG }).use(orders).use(orderItems);

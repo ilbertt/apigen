@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design. */
+/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { HttpStatus } from '../src/http.js';
@@ -21,21 +21,23 @@ function mountOrgScoped({
   allowedColumns: readonly string[];
 }): Relation {
   return relation(name)
-    .select((req, s) => {
+    .select((req, { sql }) => {
       const org = orgOf(req);
-      return org === false ? false : { policy: s.using`org_id = ${org}::uuid`, allowedColumns };
+      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
     })
-    .insert((req, s) => {
+    .insert((req, { sql }) => {
       const org = orgOf(req);
-      return org === false ? false : { policy: s.withCheck`org_id = ${org}::uuid`, allowedColumns };
+      return org === false
+        ? false
+        : { policy: sql.withCheck`org_id = ${org}::uuid`, allowedColumns };
     })
-    .update((req, s) => {
+    .update((req, { sql }) => {
       const org = orgOf(req);
-      return org === false ? false : { policy: s.using`org_id = ${org}::uuid`, allowedColumns };
+      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
     })
-    .delete((req, s) => {
+    .delete((req, { sql }) => {
       const org = orgOf(req);
-      return org === false ? false : { policy: s.using`org_id = ${org}::uuid`, allowedColumns };
+      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
     });
 }
 

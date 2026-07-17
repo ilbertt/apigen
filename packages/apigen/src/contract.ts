@@ -88,8 +88,20 @@ export interface AuthGrant<Col extends string = string> {
 }
 export type AuthResult<Col extends string = string> = false | AuthGrant<Col>;
 
-// biome-ignore lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design.
-type AuthFn<Bag, Col extends string> = (req: Request, sql: Bag) => MaybePromise<AuthResult<Col>>;
+/**
+ * Second argument to an authorization fn: a context object exposing the
+ * op-appropriate clause builder (`sql`). New fields may be added here over time,
+ * so destructure what you need: `(req, { sql }) => …`.
+ */
+export interface AuthContext<Bag = UsingBag | WithCheckBag> {
+  readonly sql: Bag;
+}
+
+// biome-ignore lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design.
+type AuthFn<Bag, Col extends string> = (
+  req: Request,
+  ctx: AuthContext<Bag>,
+) => MaybePromise<AuthResult<Col>>;
 
 export type SelectAuthFn<Col extends string = string> = AuthFn<UsingBag, Col>;
 export type DeleteAuthFn<Col extends string = string> = AuthFn<UsingBag, Col>;

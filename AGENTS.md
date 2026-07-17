@@ -14,7 +14,7 @@ bun
 - No comments that restate what types and naming already say — only comment the non-obvious
 - Use **relative imports with the `.ts` extension** (e.g. `import { foo } from './foo.ts'`) — the pinned TypeScript compiler requires the extension. On publish, `rewriteRelativeImportExtensions` turns them into `.js` (plus a small `.d.ts` pass in `build.ts`). No `#*` subpath imports — they don't emit cleanly in declarations
 - Single source of truth — never duplicate keys, enum values, or type info that belongs to a class/module; derive from the source instead
-- Biome enforces `useMaxParams: 1` — wrap multiple params in an object. Exception: callbacks/signatures we don't control (native functions like `.map((x, i) => …)`/`.reduce`/Promise executors/tagged templates, or an external dependency's API) — match the required shape and add a one-line `// biome-ignore lint/complexity/useMaxParams: …`. apigen's authorization fns `(req, sql) => …` are part of that exception (fixed public signature)
+- Biome enforces `useMaxParams: 1` — wrap multiple params in an object. Exception: callbacks/signatures we don't control (native functions like `.map((x, i) => …)`/`.reduce`/Promise executors/tagged templates, or an external dependency's API) — match the required shape and add a one-line `// biome-ignore lint/complexity/useMaxParams: …`. apigen's authorization fns `(req, { sql }) => …` are part of that exception (fixed public signature)
 - `noMagicNumbers` is off under `**/test/**` (literal expected values in assertions are fine) and `examples/**`; keep named constants in `src/`
 - Only re-export from index files - Biome enforces that
 

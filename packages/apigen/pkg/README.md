@@ -56,12 +56,12 @@ import { relation } from './api.gen';
 import { auth } from './auth'; // your code: (req) => Promise<User | null>
 
 export const orders = relation('orders')
-  .select(async (req, sql) => {
+  .select(async (req, { sql }) => {
     const user = await auth(req);
     if (!user) return false; // → 403
     return { policy: sql.using`org_id = ${user.orgId}::uuid` };
   })
-  .insert(async (req, sql) => {
+  .insert(async (req, { sql }) => {
     const user = await auth(req);
     if (!user) return false;
     return {
@@ -96,11 +96,13 @@ curl 'http://localhost:3000/orders?status=eq.paid&order=amount.desc&limit=10' \
 Each verb takes an authorization function:
 
 ```ts
-(req: Request, sql) => false | { policy; allowedColumns? }
+(req: Request, ctx: { sql }) => false | { policy; allowedColumns? }
 ```
 
-- **`req`** — the raw `Request`. There is no context object; write your own auth
-  helper and memoize it on the `Request` (via a `WeakMap`) so it runs once.
+- **`req`** — the raw `Request`. The context carries no resolved user; write your own
+  auth helper and memoize it on the `Request` (via a `WeakMap`) so it runs once.
+- **`ctx`** — a context object; destructure what you need (`(req, { sql }) => …`).
+  It exposes `sql` today and is where op-scoped tools will be added over time.
 - **`sql`** — an op-appropriate clause builder. `` sql.using`…` `` on
   select/update/delete; `` sql.withCheck`…` `` on insert. The wrong one is a type
   error. Interpolated `${values}` become **bound params**; the predicate is

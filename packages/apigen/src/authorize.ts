@@ -6,7 +6,7 @@ import {
   type WithCheckBag,
   withCheckBag,
 } from './builder/index.js';
-import type { AuthResult, Op, RelationColumns, RelationModule } from './contract.js';
+import type { AuthContext, AuthResult, Op, RelationColumns, RelationModule } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
 export interface Authorization {
@@ -15,8 +15,11 @@ export interface Authorization {
   readonly allowedColumns: readonly string[];
 }
 
-// biome-ignore lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design.
-type AuthFnCall = (req: Request, bag: UsingBag | WithCheckBag) => AuthResult | Promise<AuthResult>;
+// biome-ignore lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design.
+type AuthFnCall = (
+  req: Request,
+  ctx: AuthContext<UsingBag | WithCheckBag>,
+) => AuthResult | Promise<AuthResult>;
 
 function forbidden(message: string): never {
   throw new ApiError({ status: HttpStatus.Forbidden, message });
@@ -39,7 +42,7 @@ export async function authorize({
   }
 
   const bag = op === 'insert' ? withCheckBag : usingBag;
-  const result = await (fn as AuthFnCall)(req, bag);
+  const result = await (fn as AuthFnCall)(req, { sql: bag });
   if (result === false) {
     forbidden(`Denied "${op}" on relation "${module.name}"`);
   }

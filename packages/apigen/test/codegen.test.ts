@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design. */
+/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
@@ -56,7 +56,7 @@ test('the generated module works end-to-end against a live db', async () => {
     `,
   });
   try {
-    const todos = gen.relation('todos').select((_req, sql) => ({
+    const todos = gen.relation('todos').select((_req, { sql }) => ({
       policy: sql.using`true`,
       allowedColumns: ['id', 'title', 'priority', 'done'],
     }));

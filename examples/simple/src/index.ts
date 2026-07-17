@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design. */
+/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { SQL } from 'bun';
 import { Apigen, relation } from './api.gen.ts';
@@ -10,14 +10,14 @@ function ownerOf(req: Request): string | null {
 }
 
 const todos = relation('todos')
-  .select((req, sql) => {
+  .select((req, { sql }) => {
     const owner = ownerOf(req);
     if (!owner) {
       return false;
     }
     return { policy: sql.using`owner = ${owner}::uuid` };
   })
-  .insert((req, sql) => {
+  .insert((req, { sql }) => {
     const owner = ownerOf(req);
     if (!owner) {
       return false;
@@ -27,7 +27,7 @@ const todos = relation('todos')
       allowedColumns: ['owner', 'title', 'done', 'priority', 'notes'],
     };
   })
-  .update((req, sql) => {
+  .update((req, { sql }) => {
     const owner = ownerOf(req);
     if (!owner) {
       return false;
@@ -37,7 +37,7 @@ const todos = relation('todos')
       allowedColumns: ['title', 'done', 'priority', 'notes'],
     };
   })
-  .delete((req, sql) => {
+  .delete((req, { sql }) => {
     const owner = ownerOf(req);
     if (!owner) {
       return false;

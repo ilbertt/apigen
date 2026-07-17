@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design. */
+/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { relation } from '../api.gen.ts';
 import { auth } from '../auth.ts';
@@ -7,7 +7,7 @@ import { auth } from '../auth.ts';
 // its order. Each policy reaches the owner with an EXISTS subquery over `orders`:
 // authorization that follows a foreign key.
 export const orderItems = relation('order_items')
-  .select(async (req, sql) => {
+  .select(async (req, { sql }) => {
     const caller = await auth(req);
     if (!caller) {
       return false;
@@ -19,7 +19,7 @@ export const orderItems = relation('order_items')
       )`,
     };
   })
-  .insert(async (req, sql) => {
+  .insert(async (req, { sql }) => {
     const caller = await auth(req);
     if (!caller) {
       return false;
@@ -33,7 +33,7 @@ export const orderItems = relation('order_items')
       allowedColumns: ['order_id', 'product_id', 'quantity', 'unit_price'],
     };
   })
-  .update(async (req, sql) => {
+  .update(async (req, { sql }) => {
     const caller = await auth(req);
     if (!caller) {
       return false;
@@ -46,7 +46,7 @@ export const orderItems = relation('order_items')
       allowedColumns: ['quantity', 'unit_price'],
     };
   })
-  .delete(async (req, sql) => {
+  .delete(async (req, { sql }) => {
     const caller = await auth(req);
     if (!caller) {
       return false;

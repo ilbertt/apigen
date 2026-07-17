@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, sql) by design. */
+/** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { Apigen, relation } from '../src/index.js';
@@ -9,7 +9,7 @@ let app: Apigen;
 
 beforeAll(async () => {
   db = await createFixtureDb();
-  const orders = relation('orders').select((_req, sql) => ({ policy: sql.using`true` }));
+  const orders = relation('orders').select((_req, { sql }) => ({ policy: sql.using`true` }));
   app = new Apigen({ db: db.sql, catalog: FIXTURE_CATALOG }).use(orders);
 });
 
