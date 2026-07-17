@@ -52,6 +52,19 @@
         "typescript": "catalog:",
       },
     },
+    "examples/with-node": {
+      "name": "@repo/example-with-node",
+      "dependencies": {
+        "@repo/apigen": "workspace:*",
+        "postgres": "catalog:",
+      },
+      "devDependencies": {
+        "@electric-sql/pglite": "catalog:",
+        "@repo/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "examples/with-postgres": {
       "name": "@repo/example-with-postgres",
       "dependencies": {
@@ -224,6 +237,8 @@
     "@repo/example-with-bun": ["@repo/example-with-bun@workspace:examples/with-bun"],
 
     "@repo/example-with-elysia": ["@repo/example-with-elysia@workspace:examples/with-elysia"],
+
+    "@repo/example-with-node": ["@repo/example-with-node@workspace:examples/with-node"],
 
     "@repo/example-with-postgres": ["@repo/example-with-postgres@workspace:examples/with-postgres"],
 

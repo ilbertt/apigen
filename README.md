@@ -127,3 +127,4 @@ curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 | [`examples/with-postgres`](./examples/with-postgres) | The ecommerce schema with postgres.js |
 | [`examples/with-elysia`](./examples/with-elysia) | The ecommerce schema, `app.handle` mounted into an Elysia server |
 | [`examples/with-supabase-client`](./examples/with-supabase-client) | The stock `@supabase/supabase-js` client talking to an apigen backend (apigen is PostgREST-compatible) |
+| [`examples/with-node`](./examples/with-node) | The ecommerce schema served from Node's built-in `node:http` module — a WinterTC adapter over `app.handle` |
