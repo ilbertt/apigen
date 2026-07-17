@@ -127,3 +127,4 @@ curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 | [`examples/with-node`](./examples/with-node) | The ecommerce schema served from Node's built-in `node:http` module — a WinterTC adapter over `app.handle` |
 | [`examples/with-express`](./examples/with-express) | The ecommerce schema mounted into an Express app via a Request/Response adapter |
 | [`examples/pg-views`](./examples/pg-views) | Exposing Postgres **views** (not tables) as read-only relations — a curated projection + an aggregate |
+| [`examples/with-hono`](./examples/with-hono) | The ecommerce schema, `app.handle` mounted into a Hono server |
