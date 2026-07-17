@@ -2,34 +2,36 @@
 
 > WinterTC-compatible REST API handlers from your Postgres schema
 
-A JS library that generates [PostgREST](https://postgrest.org) endpoints for your HTTP server,
-while giving you full control over the policies for the tables.
+A JavaScript library that generates [PostgREST](https://postgrest.org)-compatible REST
+handlers from your Postgres schema. You mount them into your own server, pick which tables
+and columns to expose, and authorize each operation as ordinary code in your app.
 
 ## Motivation
 
-When creating an API, you either ask your AI agent to implement it in your codebase
-or use backend-as-a-service that takes care of exposing your tables to the web.
+There are two usual ways to put a database behind an HTTP API:
 
-The problem is that, in the first case, you are always one PR away from a missing filter param,
-a missing exposed column, etc. while in the second case, you are always one container away from the full set
-of features you need on your backend.
+- **Write the endpoints yourself.** Every table needs listing, filtering, pagination, and
+  writes, and you're one PR away from a missing filter, an over-exposed column, or code
+  that has drifted from the schema.
+- **Use a backend-as-a-service.** Supabase, Hasura, and the like generate the API for you,
+  until you need something the platform doesn't do, then you're stuck working around it.
 
-What if you could solve both problems at once?
+apigen is the middle ground. Point the codegen at your Postgres migrations, pick the tables
+to expose, and write one access policy per table. It generates the request handling; the
+code lives in your repo and runs on your server.
 
-You own the code, while the repetitive boring parts are taken care of. All you have to do is point the codegen
-to your Postgres schema, pick the tables you want to expose and define your security policies.
-
-Think of it as if you could generate a Supabase "clone" in your codebase, without having to maintain it.
+You get the table-to-API ergonomics of Supabase, as code you own instead of a service you run.
 
 ## Comparison
 
-| Solution | Fully extensible | Customize access policies | Self-hostable |
-|-|-|-|-|
-| apigen | ✅ | ✅ | ✅ |
-| Supabase | ⚠️ only Edge Functions | ⚠️ only RLS | ⚠️ limited features |
-| Hasura | ❌ | ⚠️ limited to YAML | ⚠️ limited features |
-| PostgREST | ❌ | ⚠️ only RLS | ✅ |
-| Implement from scratch | ✅ | ⚠️ needs extensive tests | ✅ |
+| Solution | Fully extensible | Customize access policies | DB schema is the API | Self-hostable |
+|-|-|-|-|-|
+| apigen | ✅ | ✅ | ✅ | ✅ |
+| [Supabase](https://supabase.com) | ⚠️ only Edge Functions | ⚠️ only RLS | ✅ | ⚠️ limited features |
+| [Hasura](https://hasura.io) | ❌ | ⚠️ limited to YAML | ✅ | ⚠️ limited features |
+| [Convex](https://convex.dev) | ✅ | ✅ | ❌ | ⚠️ limited features |
+| [PostgREST](https://postgres.org) | ❌ | ⚠️ only RLS | ✅ | ✅ |
+| Implement from scratch | ✅ | ⚠️ needs extensive tests | ❌ | ✅ |
 
 ## Quickstart
 
@@ -41,62 +43,63 @@ npm i @ilbertt/apigen
 npm i -D @electric-sql/pglite
 ```
 
-Create your db migrations in plain SQL:
+Write your schema as plain SQL migrations:
 
 ```sql
-CREATE TABLE orders ...;
-
 CREATE TABLE products ...;
+
+CREATE TABLE orders ...;
 ```
 
-Run the codegen:
+Generate a typed client from the migrations:
 
 ```bash
 npx apigen gen --migrations src/db/migrations --out src/api.gen.ts
 ```
 
-Expose your table via PostgREST-compatible endpoints:
+Expose the tables you want, each with its own policy:
 
 ```ts
 import postgres from 'postgres';
 import { Apigen, relation } from './api.gen';
 
-const db = postgres("pg://...");
+const db = postgres('postgres://...');
 
-// Type-safe table names from your migrations
+// A public, read-only catalog: only these columns, no writes.
+const products = relation('products').select((_req, { sql }) => ({
+  policy: sql.using`true`,
+  allowedColumns: ['id', 'title', 'description', 'price'],
+}));
+
+// Private: every request is scoped to the caller's org.
 const orders = relation('orders')
-  .select(() => {
-    return { allowedColumns: ['id', 'created_at'] };
+  .select(async (req, { sql }) => {
+    const user = await auth(req); // your own auth helper
+    if (!user) return false; // 403
+    return { policy: sql.using`org_id = ${user.orgId}::uuid` };
   })
   .insert(async (req, { sql }) => {
     const user = await auth(req);
-    if (!user) {
-      return false;  // returns 403
-    }
-    return { policy: sql.using`org_id = ${user.orgId}::uuid` };
-  })
-  .delete(() => false);
-
-const products = relation('products')
-  .select(() => {
-    return { allowedColumns: ['id', 'title', 'description', 'price'] };
+    if (!user) return false;
+    return {
+      policy: sql.withCheck`org_id = ${user.orgId}::uuid`,
+      allowedColumns: ['customer', 'amount', 'org_id'],
+    };
   });
+// no .update / .delete → those verbs return 403
 
-const app = new Apigen({ db })
-  .use(orders)
-  .use(products);
+const app = new Apigen({ db }).use(products).use(orders);
 
-// WinterTC-compatible handler
+// app.handle is a WinterTC (Request) => Response
 Bun.serve({ fetch: app.handle });
 ```
 
-Send requests to your API:
+Send PostgREST-style requests:
 
 ```bash
-# PostgREST-compatible endpoints
-curl 'http://localhost:3000/products?select=name,price&order=price.desc'
+curl 'http://localhost:3000/products?select=title,price&order=price.desc'
 
-curl http://localhost:3000/orders -H 'authorization: Bearer ...'
+curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 ```
 
 ## Examples
