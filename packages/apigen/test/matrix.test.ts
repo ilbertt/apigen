@@ -21,23 +21,31 @@ function mountOrgScoped({
   allowedColumns: readonly string[];
 }): Relation {
   return relation(name)
-    .select((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
+    .select({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
+      },
     })
-    .insert((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false
-        ? false
-        : { policy: sql.withCheck`org_id = ${org}::uuid`, allowedColumns };
+    .insert({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false
+          ? false
+          : { policy: sql.withCheck`org_id = ${org}::uuid`, allowedColumns };
+      },
     })
-    .update((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
+    .update({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
+      },
     })
-    .delete((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
+    .delete({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false ? false : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns };
+      },
     });
 }
 

@@ -13,38 +13,48 @@ function orgOf(req: Request): string | false {
 
 function buildApp(sql: Sql): Apigen {
   const orders = relation('orders')
-    .select((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid` };
+    .select({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false ? false : { policy: sql.using`org_id = ${org}::uuid` };
+      },
     })
-    .insert((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false
-        ? false
-        : {
-            policy: sql.withCheck`org_id = ${org}::uuid`,
-            allowedColumns: ['org_id', 'customer', 'amount', 'status', 'paid'],
-          };
+    .insert({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false
+          ? false
+          : {
+              policy: sql.withCheck`org_id = ${org}::uuid`,
+              allowedColumns: ['org_id', 'customer', 'amount', 'status', 'paid'],
+            };
+      },
     })
-    .update((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false
-        ? false
-        : {
-            policy: sql.using`org_id = ${org}::uuid`,
-            allowedColumns: ['org_id', 'customer', 'amount', 'status', 'paid'],
-          };
+    .update({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false
+          ? false
+          : {
+              policy: sql.using`org_id = ${org}::uuid`,
+              allowedColumns: ['org_id', 'customer', 'amount', 'status', 'paid'],
+            };
+      },
     })
-    .delete((req, { sql }) => {
-      const org = orgOf(req);
-      return org === false ? false : { policy: sql.using`org_id = ${org}::uuid` };
+    .delete({
+      authorization: (req, { sql }) => {
+        const org = orgOf(req);
+        return org === false ? false : { policy: sql.using`org_id = ${org}::uuid` };
+      },
     });
 
-  const orderItems = relation('order_items').select((req, { sql }) => {
-    const org = orgOf(req);
-    return org === false
-      ? false
-      : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns: ['id', 'sku', 'qty'] };
+  const orderItems = relation('order_items').select({
+    authorization: (req, { sql }) => {
+      const org = orgOf(req);
+      return org === false
+        ? false
+        : { policy: sql.using`org_id = ${org}::uuid`, allowedColumns: ['id', 'sku', 'qty'] };
+    },
   });
 
   return new Apigen({ db: sql, catalog: FIXTURE_CATALOG }).use(orders).use(orderItems);

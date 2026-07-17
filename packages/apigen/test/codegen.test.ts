@@ -56,10 +56,12 @@ test('the generated module works end-to-end against a live db', async () => {
     `,
   });
   try {
-    const todos = gen.relation('todos').select((_req, { sql }) => ({
-      policy: sql.using`true`,
-      allowedColumns: ['id', 'title', 'priority', 'done'],
-    }));
+    const todos = gen.relation('todos').select({
+      authorization: (_req, { sql }) => ({
+        policy: sql.using`true`,
+        allowedColumns: ['id', 'title', 'priority', 'done'],
+      }),
+    });
     const app = new gen.Apigen({ db: db.sql }).use(todos);
 
     const res = await app.handle(new Request('http://localhost/todos'));
