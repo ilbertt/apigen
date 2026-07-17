@@ -15,6 +15,18 @@
         "typescript": "catalog:",
       },
     },
+    "examples/pg-views": {
+      "name": "@repo/example-pg-views",
+      "dependencies": {
+        "@repo/apigen": "workspace:*",
+      },
+      "devDependencies": {
+        "@electric-sql/pglite": "catalog:",
+        "@repo/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "examples/simple": {
       "name": "@repo/example-simple",
       "dependencies": {
@@ -246,6 +258,8 @@
     "@parshjs/core": ["@parshjs/core@0.0.10", "", {}, "sha512-tMjf7tx7snUMLWQch0SXJXFxHfiJZusbG3UXivqSQN9lTf+JTj6iaWIRkpw+1FKPoV7t9WPvCi9LsmeZ98/QnQ=="],
 
     "@repo/apigen": ["@repo/apigen@workspace:packages/apigen"],
+
+    "@repo/example-pg-views": ["@repo/example-pg-views@workspace:examples/pg-views"],
 
     "@repo/example-simple": ["@repo/example-simple@workspace:examples/simple"],
 
