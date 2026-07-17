@@ -23,19 +23,7 @@ bun add @ilbertt/apigen
 
 ## Quick start
 
-**1. Start from your Postgres schema:**
-
-```sql
-create table orders (
-  id bigint generated always as identity primary key,
-  org_id uuid not null,
-  customer text not null,
-  amount numeric(12, 2) not null default 0,
-  status text not null default 'pending'
-);
-```
-
-**2. Generate the typed client** — point apigen at your running database:
+**1. Generate the typed client** — point apigen at your running database:
 
 ```sh
 bunx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api.gen.ts
@@ -53,7 +41,7 @@ bunx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api
 types, and a catalog-bound `Apigen` and `relation`. Authorization is your code, not
 generated.
 
-**3. Write your policies.** A relation is a `.use()`-able module:
+**2. Write your policies.** A relation is a `.use()`-able module:
 
 ```ts
 // orders.ts
@@ -81,7 +69,7 @@ export const orders = relation('orders')
 // unregistered verbs (.update / .delete) are denied
 ```
 
-**4. Mount and serve:**
+**3. Mount and serve:**
 
 ```ts
 import postgres from 'postgres';
@@ -186,16 +174,13 @@ speaks TCP, so apigen runs on server runtimes, not edge/Workers.
 
 ## CLI
 
-```
-apigen gen [options]
-  --database-url  Connection string of a running Postgres to introspect directly (no PGlite)
-  --migrations    Directory of *.sql migrations to introspect via PGlite (default: ./migrations)
-  --out           Output file (default: ./api.gen.ts)
-  --module        Runtime import specifier (default: @ilbertt/apigen)
-```
+`apigen gen` writes `api.gen.ts` from either a running Postgres (`--database-url`)
+or SQL migrations (`--migrations`, which needs `@electric-sql/pglite`). Run it with
+`--help` for the current flags:
 
-Pass `--database-url` or `--migrations`, not both. The migrations path needs
-`@electric-sql/pglite` as a dev dependency.
+```sh
+bunx apigen gen --help
+```
 
 ## Not included (yet)
 

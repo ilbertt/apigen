@@ -41,14 +41,6 @@ Install the package:
 npm i @ilbertt/apigen
 ```
 
-Given a Postgres schema:
-
-```sql
-CREATE TABLE products ...;
-
-CREATE TABLE orders ...;
-```
-
 Generate a typed client from your running database:
 
 ```bash
