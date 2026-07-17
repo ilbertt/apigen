@@ -16,7 +16,7 @@ There are two usual ways to put a database behind an HTTP API:
 - **Use a backend-as-a-service.** Supabase, Hasura, and the like generate the API for you,
   until you need something the platform doesn't do, then you're stuck working around it.
 
-apigen is the middle ground. Point the codegen at your Postgres migrations, pick the tables
+apigen is the middle ground. Point the codegen at your Postgres database, pick the tables
 to expose, and write one access policy per table. It generates the request handling; the
 code lives in your repo and runs on your server.
 
@@ -39,11 +39,9 @@ Install the package:
 
 ```bash
 npm i @ilbertt/apigen
-# Peer dependency, needed for codegen only
-npm i -D @electric-sql/pglite
 ```
 
-Write your schema as plain SQL migrations:
+Given a Postgres schema:
 
 ```sql
 CREATE TABLE products ...;
@@ -51,11 +49,18 @@ CREATE TABLE products ...;
 CREATE TABLE orders ...;
 ```
 
-Generate a typed client from the migrations:
+Generate a typed client from your running database:
 
 ```bash
-npx apigen gen --migrations src/db/migrations --out src/api.gen.ts
+npx apigen gen --database-url postgres://user:pw@localhost:5432/app --out src/api.gen.ts
 ```
+
+> No running database? Generate from SQL migrations instead (needs `@electric-sql/pglite`):
+>
+> ```bash
+> npm i -D @electric-sql/pglite
+> npx apigen gen --migrations src/db/migrations --out src/api.gen.ts
+> ```
 
 Expose the tables you want, each with its own policy:
 

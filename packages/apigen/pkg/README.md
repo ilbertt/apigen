@@ -19,16 +19,13 @@ parameterized SQL and run against a database you pass in.
 
 ```sh
 bun add @ilbertt/apigen
-# codegen (dev only) also needs PGlite:
-bun add -d @electric-sql/pglite
 ```
 
 ## Quick start
 
-**1. Write your schema as migrations** (`migrations/*.sql`, applied in filename order):
+**1. Start from your Postgres schema:**
 
 ```sql
--- migrations/001_init.sql
 create table orders (
   id bigint generated always as identity primary key,
   org_id uuid not null,
@@ -38,11 +35,19 @@ create table orders (
 );
 ```
 
-**2. Generate the typed client:**
+**2. Generate the typed client** — point apigen at your running database:
 
 ```sh
-bunx apigen gen --migrations ./migrations --out ./api.gen.ts
+bunx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api.gen.ts
 ```
+
+> No running database? Generate from SQL migrations instead (needs the
+> `@electric-sql/pglite` dev dependency):
+>
+> ```sh
+> bun add -d @electric-sql/pglite
+> bunx apigen gen --migrations ./migrations --out ./api.gen.ts
+> ```
 
 `api.gen.ts` is a committed file: the `catalog` (relation → column → pgType), row
 types, and a catalog-bound `Apigen` and `relation`. Authorization is your code, not
@@ -182,11 +187,15 @@ speaks TCP, so apigen runs on server runtimes, not edge/Workers.
 ## CLI
 
 ```
-apigen gen [--migrations <dir>] [--out <file>] [--module <specifier>]
-  -m, --migrations   Directory of *.sql migrations (default: ./migrations)
-  -o, --out          Output file (default: ./api.gen.ts)
-  -s, --module       Runtime import specifier (default: @ilbertt/apigen)
+apigen gen [options]
+  --database-url  Connection string of a running Postgres to introspect directly (no PGlite)
+  --migrations    Directory of *.sql migrations to introspect via PGlite (default: ./migrations)
+  --out           Output file (default: ./api.gen.ts)
+  --module        Runtime import specifier (default: @ilbertt/apigen)
 ```
+
+Pass `--database-url` or `--migrations`, not both. The migrations path needs
+`@electric-sql/pglite` as a dev dependency.
 
 ## Not included (yet)
 
