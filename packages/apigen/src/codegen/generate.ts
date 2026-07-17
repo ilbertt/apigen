@@ -1,3 +1,5 @@
+import { resolveAdapter } from '../adapters/resolve.js';
+import type { DbInput } from '../contract.js';
 import { emit } from './emit.js';
 import { introspect } from './introspect.js';
 
@@ -31,9 +33,25 @@ export async function generateFromSql({
   const db = await PGlite.create();
   try {
     await db.exec(migrations);
-    const introspection = await introspect(db);
+    const introspection = await introspect(async (sql) => (await db.query(sql)).rows);
     return emit({ introspection, moduleSpecifier });
   } finally {
     await db.close();
   }
+}
+
+/**
+ * Introspect a live Postgres connection directly — no migrations, no PGlite — and
+ * emit the `api.gen.ts` source. The caller owns the connection's lifecycle.
+ */
+export async function generateFromDb({
+  db,
+  moduleSpecifier,
+}: {
+  db: DbInput;
+  moduleSpecifier?: string;
+}): Promise<string> {
+  const adapter = resolveAdapter(db);
+  const introspection = await introspect((sql) => adapter.execute({ text: sql, values: [] }));
+  return emit({ introspection, moduleSpecifier });
 }
