@@ -1,0 +1,21 @@
+{
+  "name": "@repo/example-with-node",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "codegen": "apigen gen --migrations src/db/migrations --out src/api.gen.ts --module @repo/apigen",
+    "start:api": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "check:types": "tsc"
+  },
+  "dependencies": {
+    "@repo/apigen": "workspace:*",
+    "postgres": "catalog:"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "@electric-sql/pglite": "catalog:"
+  }
+}
