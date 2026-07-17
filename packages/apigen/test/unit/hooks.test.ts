@@ -1,8 +1,8 @@
 /** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { Apigen, type Relation, relation } from '../src/index.js';
-import { createFixtureDb, FIXTURE_CATALOG, type TestDb } from './helpers/db.js';
+import { Apigen, type Relation, relation } from '../../src/index.js';
+import { createFixtureDb, FIXTURE_CATALOG, type TestDb } from '../helpers/db.js';
 
 let db: TestDb;
 

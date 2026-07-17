@@ -11,19 +11,6 @@ import {
 import type { Filter, FunctionArgs, ParsedRequest, Query, RelationColumns } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
-/** Types whose `int8`/`numeric`/temporal values we surface as strings via `::text`. */
-const TEXT_CAST_TYPES = new Set([
-  'int8',
-  'numeric',
-  'money',
-  'timestamptz',
-  'timestamp',
-  'date',
-  'time',
-  'timetz',
-  'interval',
-]);
-
 const JSON_TYPES = new Set(['json', 'jsonb']);
 
 const SCALAR_OP_SQL: Record<string, string> = {
@@ -63,10 +50,6 @@ function castSuffix(pgType: string): Sql {
   return raw(`::${pgType}`);
 }
 
-function needsTextCast(pgType: string): boolean {
-  return TEXT_CAST_TYPES.has(pgType);
-}
-
 function bindValue({ value, pgType }: { value: unknown; pgType: string }): unknown {
   if (JSON_TYPES.has(pgType) && value !== null && typeof value === 'object') {
     return JSON.stringify(value);
@@ -79,16 +62,17 @@ function castValue({ value, pgType }: { value: unknown; pgType: string }): Sql {
   return sql`${bindValue({ value, pgType })}${castSuffix(pgType)}`;
 }
 
-function projectionColumn({ col, pgType }: { col: string; pgType: string }): Sql {
-  const id = ident(col);
-  return needsTextCast(pgType) ? sql`${id}::text as ${id}` : id;
-}
-
 function projection({ cols, columns }: { cols: readonly string[]; columns: RelationColumns }): Sql {
   if (cols.length === 0) {
     internal('Relation has no visible columns to project');
   }
-  const frags = cols.map((col) => projectionColumn({ col, pgType: pgTypeOf({ columns, col }) }));
+  // Project raw columns and let json_agg/json_build_object render them: numeric keeps
+  // its scale, timestamptz serializes as ISO-8601, int8 as a number — byte-identical
+  // to PostgREST, which renders responses through Postgres' own JSON functions.
+  const frags = cols.map((col) => {
+    pgTypeOf({ columns, col });
+    return ident(col);
+  });
   return join({ values: frags, separator: ', ' });
 }
 
@@ -167,18 +151,27 @@ function assemble(parts: readonly Sql[]): Sql {
   return join({ values: parts.filter((p) => p !== empty), separator: ' ' });
 }
 
+/**
+ * A rendered result set: `body` is the JSON text Postgres produced, `page` the
+ * number of rows on this page, `total` the full match count (only when a count was
+ * requested). Every compiled statement returns exactly one row of this shape.
+ */
+export const RENDERED_KEYS = { body: 'body', page: 'page', total: 'total' } as const;
+
 export function compileSelect({
   relation,
   columns,
   parsed,
   policy,
   allowedColumns,
+  count = false,
 }: {
   relation: string;
   columns: RelationColumns;
   parsed: ParsedRequest;
   policy: Policy;
   allowedColumns: readonly string[];
+  count?: boolean;
 }): Query {
   const cols = parsed.select ?? allowedColumns;
   const parts: Sql[] = [
@@ -192,7 +185,14 @@ export function compileSelect({
   if (parsed.offset !== undefined) {
     parts.push(sql`offset ${parsed.offset}`);
   }
-  return toQuery(assemble(parts));
+  const page = assemble(parts);
+  // `total` re-runs the filter without limit/offset — PostgREST's count=exact.
+  const total = count
+    ? sql`, (select count(*)::int from ${ident(relation)} ${whereClause({ policy, filters: parsed.filters, columns })}) as total`
+    : empty;
+  return toQuery(
+    sql`select coalesce(json_agg(_apigen_rows), '[]')::text as body, count(*)::int as page${total} from (${page}) as _apigen_rows`,
+  );
 }
 
 export interface CompiledInsert {
@@ -228,7 +228,7 @@ export function compileInsert({
   // default is not visible to the predicate here (PLAN's insert shape). Rows that
   // fail the predicate are filtered out; the caller rejects the batch on a count
   // mismatch.
-  const stmt = sql`insert into ${ident(relation)} (${colList}) select ${colList} from (values ${values}) as v (${colList}) where (${policy.fragment}) returning ${projection({ cols: returning, columns })}`;
+  const stmt = sql`with _apigen_ins as (insert into ${ident(relation)} (${colList}) select ${colList} from (values ${values}) as v (${colList}) where (${policy.fragment}) returning ${projection({ cols: returning, columns })}) select coalesce(json_agg(_apigen_ins), '[]')::text as body, count(*)::int as page from _apigen_ins`;
   return { query: toQuery(stmt), rowCount: rows.length };
 }
 
@@ -260,7 +260,15 @@ export function compileUpdate({
   );
   const setClause = join({ values: assignments, separator: ', ' });
   const where = whereClause({ policy, filters: parsed.filters, columns });
-  const update = sql`update ${ident(relation)} set ${setClause} ${where} returning ctid as ${raw(quoteIdent(CTID_KEY))}, ${projection({ cols: returning, columns })}`;
+  const ctid = raw(quoteIdent(CTID_KEY));
+  const proj = projection({ cols: returning, columns });
+  // Aggregate the body from a subquery that projects only the returning columns —
+  // json_agg over a record is compact (like row_to_json), matching PostgREST, and
+  // keeps the ctid sentinel (used for WITH CHECK re-verification) out of the JSON.
+  // ctids come back as a JSON text array (parsed in the handler) rather than a
+  // Postgres text[]: a text[] is returned unparsed when the driver has
+  // fetch_types disabled, whereas ::text is always a plain string.
+  const update = sql`with _apigen_upd as (update ${ident(relation)} set ${setClause} ${where} returning ctid as ${ctid}, ${proj}) select coalesce((select json_agg(_apigen_rows) from (select ${proj} from _apigen_upd) _apigen_rows), '[]')::text as body, (select count(*)::int from _apigen_upd) as page, coalesce((select json_agg(${ctid}::text) from _apigen_upd), '[]')::text as ctids`;
 
   const verify = (ctids: readonly string[]): Query => {
     const tids = join({ values: ctids.map((c) => sql`${c}::tid`), separator: ', ' });
@@ -286,7 +294,7 @@ export function compileDelete({
   returning: readonly string[];
 }): Query {
   const where = whereClause({ policy, filters: parsed.filters, columns });
-  const stmt = sql`delete from ${ident(relation)} ${where} returning ${projection({ cols: returning, columns })}`;
+  const stmt = sql`with _apigen_del as (delete from ${ident(relation)} ${where} returning ${projection({ cols: returning, columns })}) select coalesce(json_agg(_apigen_del), '[]')::text as body, count(*)::int as page from _apigen_del`;
   return toQuery(stmt);
 }
 

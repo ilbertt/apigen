@@ -1,0 +1,42 @@
+name: apigen-differential
+
+# Stands up a real PostgREST in front of a Postgres seeded with the shared test
+# fixtures. The differential test (compliance.test.ts) fires the same requests at
+# this PostgREST and at apigen in-process, both pointed at this same database.
+#
+#   docker compose -f test/differential/docker-compose.yml up -d --wait
+#   APIGEN_DIFF=1 bun test test/differential
+#   docker compose -f test/differential/docker-compose.yml down -v
+#
+# or just: bun run test:diff
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${APIGEN_PG_PORT:-5433}:5432"
+    volumes:
+      # Applied once, alphabetically, on first init: schema, then roles/grants.
+      # Row data is (re)seeded deterministically by the test itself, not here.
+      - ../fixtures/migrations.sql:/docker-entrypoint-initdb.d/01-migrations.sql:ro
+      - ./roles.sql:/docker-entrypoint-initdb.d/02-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.3
+    environment:
+      PGRST_DB_URI: postgres://authenticator:authenticator_pw@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_SERVER_PORT: 3000
+    ports:
+      - "${POSTGREST_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy

@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { createPostgresAdapter } from '../src/adapters/index.js';
-import { join, type Sql, sql } from '../src/builder/index.js';
-import type { Adapter } from '../src/contract.js';
-import { createTestDb, type TestDb } from './helpers/db.js';
+import { createPostgresAdapter } from '../../src/adapters/index.js';
+import { join, type Sql, sql } from '../../src/builder/index.js';
+import type { Adapter } from '../../src/contract.js';
+import { createTestDb, type TestDb } from '../helpers/db.js';
 
 let db: TestDb;
 let adapter: Adapter;

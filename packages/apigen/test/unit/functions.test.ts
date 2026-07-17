@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { generateFromSql } from '../src/codegen/generate.js';
-import type { FunctionCatalog } from '../src/contract.js';
-import { Apigen, func } from '../src/index.js';
-import { createTestDb, type TestDb } from './helpers/db.js';
+import { generateFromSql } from '../../src/codegen/generate.js';
+import type { FunctionCatalog } from '../../src/contract.js';
+import { Apigen, func } from '../../src/index.js';
+import { createTestDb, type TestDb } from '../helpers/db.js';
 
 const MIGRATIONS = `
   create table todos (

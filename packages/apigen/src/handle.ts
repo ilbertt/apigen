@@ -1,6 +1,5 @@
 import { type Authorization, authorize } from './authorize.js';
 import {
-  CTID_KEY,
   compileDelete,
   compileFunction,
   compileInsert,
@@ -18,7 +17,7 @@ import type {
   RelationColumns,
   RelationModule,
 } from './contract.js';
-import { ApiError, HttpStatus, jsonResponse } from './http.js';
+import { ApiError, buildResponse, HttpStatus, jsonError } from './http.js';
 import { parseRequest } from './parse.js';
 
 const METHOD_OP: Record<string, Op> = {
@@ -31,13 +30,56 @@ const METHOD_OP: Record<string, Op> = {
 /** Functions are called under this path prefix: `POST /rpc/<name>`. */
 const RPC_PREFIX = 'rpc';
 
-/** Postgres SQLSTATE class 22 = data exception (bad cast, etc.) → client error. */
-const PG_DATA_EXCEPTION_CLASS = '22';
+/** PostgREST's singular representation: exactly one object, or 406. */
+const SINGULAR_MEDIA = 'application/vnd.pgrst.object+json';
+
+/** SQLSTATE → HTTP status, following PostgREST's mapping for the common cases. */
+const PG_STATUS: Record<string, number> = {
+  '23503': HttpStatus.Conflict,
+  '23505': HttpStatus.Conflict,
+  '42P01': HttpStatus.NotFound,
+  '42883': HttpStatus.NotFound,
+  '42501': HttpStatus.Forbidden,
+};
 
 type Row = Record<string, unknown>;
 
+/** One rendered row: the JSON text Postgres produced plus the page/affected count. */
+interface Rendered {
+  body: string;
+  page: number;
+  total?: number;
+  /** JSON text array of updated-row ctids (update only); parsed for WITH CHECK re-verification. */
+  ctids?: string;
+}
+
+interface Preferences {
+  return: 'minimal' | 'representation';
+  count: boolean;
+}
+
 function badRequest(message: string): never {
   throw new ApiError({ status: HttpStatus.BadRequest, message });
+}
+
+function parsePreferences(req: Request): Preferences {
+  const prefer = req.headers.get('prefer') ?? '';
+  return {
+    return: prefer.includes('return=representation') ? 'representation' : 'minimal',
+    count: prefer.includes('count=exact'),
+  };
+}
+
+function wantsSingular(req: Request): boolean {
+  return (req.headers.get('accept') ?? '').includes(SINGULAR_MEDIA);
+}
+
+function rowRange({ offset, page }: { offset: number; page: number }): string {
+  return page > 0 ? `${offset}-${offset + page - 1}` : '*';
+}
+
+function contentRange({ numerator, total }: { numerator: string; total: number | null }): string {
+  return `${numerator}/${total ?? '*'}`;
 }
 
 function relationNameFromUrl(url: URL): string {
@@ -132,6 +174,14 @@ function ensureArgs({
   }
 }
 
+async function runOne(args: {
+  adapter: Adapter;
+  query: { text: string; values: unknown[] };
+}): Promise<Rendered> {
+  const rows = await args.adapter.transaction((tx) => tx.execute(args.query));
+  return rows[0] as Rendered;
+}
+
 async function handleFunction({
   req,
   name,
@@ -157,7 +207,7 @@ async function handleFunction({
 
   const query = compileFunction({ name, args, body });
   const rows = await adapter.transaction((tx) => tx.execute(query));
-  return jsonResponse({ status: HttpStatus.Ok, body: rows });
+  return buildResponse({ status: HttpStatus.Ok, body: JSON.stringify(rows) });
 }
 
 async function handleRpc({
@@ -222,6 +272,8 @@ async function handleSelect({
     ...parsed.order.map((o) => o.column),
   ];
   ensureAllowed({ cols: referenced, auth, relation });
+  const prefs = parsePreferences(req);
+  const singular = wantsSingular(req);
 
   const query = compileSelect({
     relation,
@@ -229,9 +281,64 @@ async function handleSelect({
     parsed,
     policy: auth.policy,
     allowedColumns: auth.allowedColumns,
+    count: prefs.count,
   });
-  const rows = await adapter.transaction((tx) => tx.execute(query));
-  return jsonResponse({ status: HttpStatus.Ok, body: rows });
+  const result = await runOne({ adapter, query });
+  const offset = parsed.offset ?? 0;
+  const total = prefs.count ? (result.total ?? 0) : null;
+  const headers: Record<string, string> = {};
+  if (prefs.count) {
+    headers['preference-applied'] = 'count=exact';
+  }
+
+  if (singular) {
+    if (result.page !== 1) {
+      throw new ApiError({
+        status: HttpStatus.NotAcceptable,
+        code: 'PGRST116',
+        message: 'JSON object requested, multiple (or no) rows returned',
+        details: `The result contains ${result.page} rows`,
+      });
+    }
+    headers['content-range'] = contentRange({ numerator: rowRange({ offset, page: 1 }), total });
+    headers['content-type'] = `${SINGULAR_MEDIA}; charset=utf-8`;
+    // json_agg renders a one-element array `[<obj>]`; unwrap to the object byte-for-byte.
+    return buildResponse({ status: HttpStatus.Ok, body: result.body.slice(1, -1), headers });
+  }
+
+  headers['content-range'] = contentRange({
+    numerator: rowRange({ offset, page: result.page }),
+    total,
+  });
+  const partial = total !== null && offset + result.page < total;
+  return buildResponse({
+    status: partial ? HttpStatus.PartialContent : HttpStatus.Ok,
+    body: result.body,
+    headers,
+  });
+}
+
+function writeResponse({
+  prefs,
+  result,
+  numerator,
+  representationStatus,
+  minimalStatus,
+}: {
+  prefs: Preferences;
+  result: Rendered;
+  numerator: string;
+  representationStatus: number;
+  minimalStatus: number;
+}): Response {
+  const headers: Record<string, string> = {
+    'content-range': contentRange({ numerator, total: null }),
+  };
+  if (prefs.return === 'representation') {
+    headers['preference-applied'] = 'return=representation';
+    return buildResponse({ status: representationStatus, body: result.body, headers });
+  }
+  return buildResponse({ status: minimalStatus, body: null, headers });
 }
 
 async function handleInsert({
@@ -261,7 +368,7 @@ async function handleInsert({
     badRequest('Insert row must have at least one column');
   }
   ensureAllowed({ cols: insertColumns, auth, relation });
-
+  const prefs = parsePreferences(req);
   const returning = parsed.select ?? auth.allowedColumns;
   ensureAllowed({ cols: returning, auth, relation });
 
@@ -273,17 +380,24 @@ async function handleInsert({
     policy: auth.policy,
     returning,
   });
-  const inserted = await adapter.transaction(async (tx) => {
-    const result = await tx.execute(query);
-    if (result.length !== rowCount) {
+  const result = await adapter.transaction(async (tx) => {
+    const rendered = (await tx.execute(query))[0] as Rendered;
+    if (rendered.page !== rowCount) {
       throw new ApiError({
         status: HttpStatus.Forbidden,
         message: `Insert into "${relation}" violates the WITH CHECK policy`,
       });
     }
-    return result;
+    return rendered;
   });
-  return jsonResponse({ status: HttpStatus.Created, body: inserted });
+  // POST is 201 whether or not the body is returned; PostgREST reports no row range.
+  return writeResponse({
+    prefs,
+    result,
+    numerator: '*',
+    representationStatus: HttpStatus.Created,
+    minimalStatus: HttpStatus.Created,
+  });
 }
 
 async function handleUpdate({
@@ -314,7 +428,7 @@ async function handleUpdate({
   }
   ensureAllowed({ cols: setColumns, auth, relation });
   ensureCatalog({ cols: parsed.filters.map((f) => f.column), columns, relation });
-
+  const prefs = parsePreferences(req);
   const returning = parsed.select ?? auth.allowedColumns;
   ensureAllowed({ cols: returning, auth, relation });
 
@@ -327,9 +441,9 @@ async function handleUpdate({
     policy: auth.policy,
     returning,
   });
-  const updated = await adapter.transaction(async (tx) => {
-    const result = (await tx.execute(plan.update)) as Row[];
-    const ctids = result.map((r) => r[CTID_KEY]).filter((c): c is string => typeof c === 'string');
+  const result = await adapter.transaction(async (tx) => {
+    const rendered = (await tx.execute(plan.update))[0] as Rendered;
+    const ctids = rendered.ctids ? (JSON.parse(rendered.ctids) as string[]) : [];
     if (ctids.length > 0) {
       const violations = await tx.execute(plan.verify(ctids));
       if (violations.length > 0) {
@@ -339,12 +453,15 @@ async function handleUpdate({
         });
       }
     }
-    for (const row of result) {
-      delete row[CTID_KEY];
-    }
-    return result;
+    return rendered;
   });
-  return jsonResponse({ status: HttpStatus.Ok, body: updated });
+  return writeResponse({
+    prefs,
+    result,
+    numerator: rowRange({ offset: 0, page: result.page }),
+    representationStatus: HttpStatus.Ok,
+    minimalStatus: HttpStatus.NoContent,
+  });
 }
 
 async function handleDelete({
@@ -365,7 +482,7 @@ async function handleDelete({
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'delete', module, columns });
   ensureCatalog({ cols: parsed.filters.map((f) => f.column), columns, relation });
-
+  const prefs = parsePreferences(req);
   const returning = parsed.select ?? auth.allowedColumns;
   ensureAllowed({ cols: returning, auth, relation });
 
@@ -376,21 +493,60 @@ async function handleDelete({
     policy: auth.policy,
     returning,
   });
-  const rows = await adapter.transaction((tx) => tx.execute(query));
-  return jsonResponse({ status: HttpStatus.Ok, body: rows });
+  const result = await runOne({ adapter, query });
+  // PostgREST reports no row range for deletes.
+  return writeResponse({
+    prefs,
+    result,
+    numerator: '*',
+    representationStatus: HttpStatus.Ok,
+    minimalStatus: HttpStatus.NoContent,
+  });
+}
+
+function statusForPg(code: string): number {
+  const mapped = PG_STATUS[code];
+  if (mapped !== undefined) {
+    return mapped;
+  }
+  switch (code.slice(0, 2)) {
+    case '22': // data exception (bad cast, numeric overflow, …)
+    case '23': // integrity constraint (non-conflict)
+    case '42': // syntax / access rule
+    case 'P0': // PL/pgSQL RAISE
+      return HttpStatus.BadRequest;
+    default:
+      return HttpStatus.InternalServerError;
+  }
 }
 
 function errorResponse(err: unknown): Response {
   if (err instanceof ApiError) {
-    return jsonResponse({ status: err.status, body: { message: err.message } });
+    return jsonError({
+      status: err.status,
+      body: { code: err.code, details: err.details, hint: err.hint, message: err.message },
+    });
   }
-  const code = (err as { code?: unknown }).code;
-  if (typeof code === 'string' && code.startsWith(PG_DATA_EXCEPTION_CLASS)) {
-    const message = err instanceof Error ? err.message : 'Invalid request value';
-    return jsonResponse({ status: HttpStatus.BadRequest, body: { message } });
+  // A Postgres driver error: pass its SQLSTATE + message/detail/hint through, as
+  // PostgREST does. Read fields directly — `Error.message` is non-enumerable, so a
+  // spread would drop it.
+  const e = err as { code?: unknown; message?: unknown; detail?: unknown; hint?: unknown };
+  if (typeof e.code === 'string') {
+    return jsonError({
+      status: statusForPg(e.code),
+      body: {
+        code: e.code,
+        details: typeof e.detail === 'string' ? e.detail : null,
+        hint: typeof e.hint === 'string' ? e.hint : null,
+        message: typeof e.message === 'string' ? e.message : 'Database error',
+      },
+    });
   }
   const message = err instanceof Error ? err.message : 'Internal error';
-  return jsonResponse({ status: HttpStatus.InternalServerError, body: { message } });
+  return jsonError({
+    status: HttpStatus.InternalServerError,
+    body: { code: null, details: null, hint: null, message },
+  });
 }
 
 export async function handleRequest({
@@ -437,6 +593,7 @@ export async function handleRequest({
     if (module === undefined || columns === undefined) {
       throw new ApiError({
         status: HttpStatus.NotFound,
+        code: 'PGRST205',
         message: `Relation "${relation}" is not exposed`,
       });
     }

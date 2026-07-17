@@ -2,8 +2,8 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { generateFromDb, generateFromSql } from '../src/codegen/generate.js';
-import { createTestDb, type TestDb } from './helpers/db.js';
+import { generateFromDb, generateFromSql } from '../../src/codegen/generate.js';
+import { createTestDb, type TestDb } from '../helpers/db.js';
 
 const MIGRATIONS = `
   create table todos (
@@ -69,7 +69,8 @@ test('the generated module works end-to-end against a live db', async () => {
     const rows = (await res.json()) as Record<string, unknown>[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ title: 'ship it', priority: 2, done: false });
-    expect(typeof rows[0]?.id).toBe('string');
+    // int8 renders as a JSON number (Postgres-rendered JSON), matching PostgREST.
+    expect(typeof rows[0]?.id).toBe('number');
   } finally {
     await db.end();
   }

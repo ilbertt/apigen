@@ -1,8 +1,9 @@
 /** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { Apigen, relation } from '../src/index.js';
-import { createFixtureDb, FIXTURE_CATALOG, type Sql, type TestDb } from './helpers/db.js';
+import { Apigen, relation } from '../../src/index.js';
+import { createFixtureDb, FIXTURE_CATALOG, type Sql, type TestDb } from '../helpers/db.js';
+import { REPRESENTATION } from '../helpers/http.js';
 
 const ORG1 = '11111111-1111-1111-1111-111111111111';
 const ORG2 = '22222222-2222-2222-2222-222222222222';
@@ -82,17 +83,20 @@ function send({
   path,
   org,
   body,
+  prefer,
 }: {
   method: string;
   path: string;
   org?: string;
   body?: unknown;
+  prefer?: string;
 }): Promise<Response> {
   return app.handle(
     new Request(`http://localhost${path}`, {
       method,
       headers: {
         ...(org ? { 'x-org-id': org } : {}),
+        ...(prefer ? { prefer } : {}),
         'content-type': 'application/json',
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -163,6 +167,7 @@ test('insert respects WITH CHECK: matching org inserts', async () => {
     method: 'POST',
     path: '/orders',
     org: ORG1,
+    prefer: REPRESENTATION,
     body: { org_id: ORG1, customer: 'Dave', amount: 10 },
   });
   expect(res.status).toBe(201);
@@ -191,6 +196,7 @@ test('update within scope succeeds', async () => {
     method: 'PATCH',
     path: '/orders?customer=eq.Bob',
     org: ORG1,
+    prefer: REPRESENTATION,
     body: { status: 'paid' },
   });
   expect(res.status).toBe(200);
@@ -217,6 +223,7 @@ test('delete removes only in-scope rows', async () => {
     method: 'DELETE',
     path: '/orders?customer=eq.Bob',
     org: ORG1,
+    prefer: REPRESENTATION,
   });
   expect(res.status).toBe(200);
   expect(await rows(res)).toHaveLength(1);
@@ -230,6 +237,7 @@ test('delete cannot reach another org’s rows (silent filter)', async () => {
     method: 'DELETE',
     path: '/orders?customer=eq.Carol',
     org: ORG1,
+    prefer: REPRESENTATION,
   });
   expect(res.status).toBe(200);
   expect(await rows(res)).toHaveLength(0);
