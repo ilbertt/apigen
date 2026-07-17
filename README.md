@@ -65,26 +65,39 @@ import { Apigen, relation } from './api.gen';
 
 const db = postgres('postgres://...');
 
-// A public, read-only catalog: only these columns, no writes.
-const products = relation('products').select((_req, { sql }) => ({
-  policy: sql.using`true`,
-  allowedColumns: ['id', 'title', 'description', 'price'],
-}));
+// A public, read-only catalog — no authorization needed.
+// beforeExecute logs to observability; afterExecute stamps a response header.
+const products = relation('products').select({
+  beforeExecute: ({ op, relation }) => {
+    void fetch('https://o11y.example/ingest', {
+      method: 'POST',
+      body: JSON.stringify({ op, relation }),
+    }).catch(() => {});
+  },
+  afterExecute: ({ relation, response }) => {
+    response.headers.set('x-apigen-relation', relation);
+    return response;
+  },
+});
 
 // Private: every request is scoped to the caller's org.
 const orders = relation('orders')
-  .select(async (req, { sql }) => {
-    const user = await auth(req); // your own auth helper
-    if (!user) return false; // 403
-    return { policy: sql.using`org_id = ${user.orgId}::uuid` };
+  .select({
+    authorization: async (req, { sql }) => {
+      const user = await auth(req); // your own auth helper
+      if (!user) return false; // 403
+      return { policy: sql.using`org_id = ${user.orgId}::uuid` };
+    },
   })
-  .insert(async (req, { sql }) => {
-    const user = await auth(req);
-    if (!user) return false;
-    return {
-      policy: sql.withCheck`org_id = ${user.orgId}::uuid`,
-      allowedColumns: ['customer', 'amount', 'org_id'],
-    };
+  .insert({
+    authorization: async (req, { sql }) => {
+      const user = await auth(req);
+      if (!user) return false;
+      return {
+        policy: sql.withCheck`org_id = ${user.orgId}::uuid`,
+        allowedColumns: ['customer', 'amount', 'org_id'],
+      };
+    },
   });
 // no .update / .delete → those verbs return 403
 
@@ -104,9 +117,9 @@ curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 
 ## Examples
 
-| Example | Stack | What it shows |
-| --- | --- | --- |
-| [`examples/simple`](./examples/simple) | Bun.SQL · Bun.serve | The core patterns on a single `todos` table — relations, per-verb policies, `allowedColumns`; no joins |
-| [`examples/with-bun`](./examples/with-bun) | Bun.SQL · Bun.serve | The ecommerce schema with Bun's built-in SQL client |
-| [`examples/with-postgres`](./examples/with-postgres) | postgres.js · Bun.serve | The ecommerce schema with postgres.js |
-| [`examples/with-elysia`](./examples/with-elysia) | Bun.SQL · Elysia | The ecommerce schema, `app.handle` mounted into an Elysia server |
+| Example | What it shows |
+| --- | --- |
+| [`examples/simple`](./examples/simple) | The core patterns on a single `todos` table — relations, per-verb policies, `allowedColumns`; no joins |
+| [`examples/with-bun`](./examples/with-bun) | The ecommerce schema with Bun's built-in SQL client |
+| [`examples/with-postgres`](./examples/with-postgres) | The ecommerce schema with postgres.js |
+| [`examples/with-elysia`](./examples/with-elysia) | The ecommerce schema, `app.handle` mounted into an Elysia server |

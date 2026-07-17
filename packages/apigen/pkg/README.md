@@ -56,18 +56,22 @@ import { relation } from './api.gen';
 import { auth } from './auth'; // your code: (req) => Promise<User | null>
 
 export const orders = relation('orders')
-  .select(async (req, { sql }) => {
-    const user = await auth(req);
-    if (!user) return false; // → 403
-    return { policy: sql.using`org_id = ${user.orgId}::uuid` };
+  .select({
+    authorization: async (req, { sql }) => {
+      const user = await auth(req);
+      if (!user) return false; // → 403
+      return { policy: sql.using`org_id = ${user.orgId}::uuid` };
+    },
   })
-  .insert(async (req, { sql }) => {
-    const user = await auth(req);
-    if (!user) return false;
-    return {
-      policy: sql.withCheck`org_id = ${user.orgId}::uuid`,
-      allowedColumns: ['customer', 'amount', 'status', 'org_id'],
-    };
+  .insert({
+    authorization: async (req, { sql }) => {
+      const user = await auth(req);
+      if (!user) return false;
+      return {
+        policy: sql.withCheck`org_id = ${user.orgId}::uuid`,
+        allowedColumns: ['customer', 'amount', 'status', 'org_id'],
+      };
+    },
   });
 // omitted verbs (.update / .delete) → those operations are denied
 ```
@@ -93,7 +97,15 @@ curl 'http://localhost:3000/orders?status=eq.paid&order=amount.desc&limit=10' \
 
 ## Authorization
 
-Each verb takes an authorization function:
+Each verb takes an operation-config object:
+
+```ts
+.select({ authorization?, beforeExecute?, afterExecute? })
+```
+
+`authorization` is the same function as before and is now **optional** — omitting
+it exposes that op **publicly** (policy `USING true`, all columns). When present it
+has the shape:
 
 ```ts
 (req: Request, ctx: { sql }) => false | { policy; allowedColumns? }
@@ -119,6 +131,33 @@ Each verb takes an authorization function:
 
 Reads and deletes **filter silently** (out-of-scope rows are simply invisible);
 writes **reject** rows that fail `WITH CHECK`.
+
+### Hooks
+
+Two optional per-op hooks, each taking a single object arg:
+
+- **`beforeExecute`** — `({ req, op, relation }) => void` (may be `async`). Runs
+  once the op is routed, **before** the query. For logging/observability.
+- **`afterExecute`** — `({ req, op, relation, response }) => Response`. Runs only on
+  a **successful** response and **must return** a `Response` (the same one mutated,
+  or a new one). It does **not** receive rows.
+
+```ts
+import { relation } from '../api.gen.ts';
+
+export const products = relation('products').select({
+  beforeExecute: ({ op, relation }) => {
+    void fetch('https://o11y.example/ingest', {
+      method: 'POST',
+      body: JSON.stringify({ op, relation }),
+    }).catch(() => {});
+  },
+  afterExecute: ({ relation, response }) => {
+    response.headers.set('x-apigen-relation', relation);
+    return response;
+  },
+});
+```
 
 ## Query parameters (PostgREST subset)
 
@@ -164,8 +203,8 @@ apigen gen [--migrations <dir>] [--out <file>] [--module <specifier>]
 
 ## Not included (yet)
 
-RPC/functions, embeds, OpenAPI generation, `before`/`after` hooks, divergent
-`withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of scope for now.
+RPC/functions, embeds, OpenAPI generation, divergent `withCheck`, a `pg` adapter,
+and SQLite/D1 dialects are out of scope for now.
 
 ## License
 
