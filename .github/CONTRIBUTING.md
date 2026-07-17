@@ -6,7 +6,9 @@
 git clone https://github.com/ilbertt/apigen
 cd apigen
 bun install
-bun run build
+bun check:all      # types + lint/format
+bun run test       # run all tests
+bun run build      # build the publishable package
 ```
 
 ## Commit messages

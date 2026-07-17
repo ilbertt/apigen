@@ -8,7 +8,8 @@
     "check:codestyle": "bun run --bun biome check",
     "check:all": "bun check:types && bun check:codestyle",
     "check:commit-message": "bun run --bun commitlint",
-    "fix:codestyle": "bun run --bun biome check --write"
+    "fix:codestyle": "bun run --bun biome check --write",
+    "test": "bun run --bun turbo test"
   },
   "workspaces": {
     "packages": [
