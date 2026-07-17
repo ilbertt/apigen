@@ -53,13 +53,14 @@ export const command = defineCommand('gen', {
   },
   handler: async ({ options, print }) => {
     const databaseUrl = options['database-url'];
-    if (databaseUrl && options.migrations) {
+    const migrationsPath = options.migrations;
+    if (databaseUrl && migrationsPath) {
       throw new Error('Pass either --database-url or --migrations, not both.');
     }
     const source = databaseUrl
       ? await generateFromDatabaseUrl({ url: databaseUrl, moduleSpecifier: options.module })
       : await generateFromSql({
-          migrations: await readMigrations(options.migrations ?? DEFAULT_MIGRATIONS_DIR),
+          migrations: await readMigrations(migrationsPath ?? DEFAULT_MIGRATIONS_DIR),
           moduleSpecifier: options.module,
         });
     const outPath = isAbsolute(options.out) ? options.out : resolve(process.cwd(), options.out);
