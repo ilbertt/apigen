@@ -6,7 +6,14 @@ import {
   type WithCheckBag,
   withCheckBag,
 } from './builder/index.js';
-import type { AuthContext, AuthResult, Op, RelationColumns, RelationModule } from './contract.js';
+import type {
+  AuthContext,
+  AuthGrant,
+  AuthResult,
+  Op,
+  RelationColumns,
+  RelationModule,
+} from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
 export interface Authorization {
@@ -25,6 +32,11 @@ function forbidden(message: string): never {
   throw new ApiError({ status: HttpStatus.Forbidden, message });
 }
 
+/** The implicit grant for an op that registers no `authorization`: fully public. */
+function publicGrant(op: Op): AuthGrant {
+  return { policy: op === 'insert' ? withCheckBag.withCheck`true` : usingBag.using`true` };
+}
+
 export async function authorize({
   req,
   op,
@@ -36,13 +48,16 @@ export async function authorize({
   module: RelationModule;
   columns: RelationColumns;
 }): Promise<Authorization> {
-  const fn = module.handlers[op];
-  if (!fn) {
+  const config = module.handlers[op];
+  if (!config) {
     forbidden(`Operation "${op}" is not allowed on relation "${module.name}"`);
   }
 
-  const bag = op === 'insert' ? withCheckBag : usingBag;
-  const result = await (fn as AuthFnCall)(req, { sql: bag });
+  const result = config.authorization
+    ? await (config.authorization as AuthFnCall)(req, {
+        sql: op === 'insert' ? withCheckBag : usingBag,
+      })
+    : publicGrant(op);
   if (result === false) {
     forbidden(`Denied "${op}" on relation "${module.name}"`);
   }

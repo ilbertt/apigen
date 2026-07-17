@@ -110,8 +110,47 @@ export type InsertAuthFn<Col extends string = string> = AuthFn<WithCheckBag, Col
 
 export type AnyAuthFn = SelectAuthFn | InsertAuthFn | UpdateAuthFn | DeleteAuthFn;
 
-/** A mounted relation: its name plus the authorization fn registered per op. */
+/** Lifecycle context passed to `beforeExecute`, before the query runs. */
+export interface BeforeExecuteContext {
+  readonly req: Request;
+  readonly op: Op;
+  readonly relation: string;
+}
+
+/** Lifecycle context passed to `afterExecute`: the built {@link Response} to modify or replace. */
+export interface AfterExecuteContext {
+  readonly req: Request;
+  readonly op: Op;
+  readonly relation: string;
+  readonly response: Response;
+}
+
+/** Side-effect hook run once the op is routed, before the query — for logging/observability. */
+export type BeforeExecute = (ctx: BeforeExecuteContext) => MaybePromise<void>;
+
+/** Hook run on a successful response — return the (possibly modified) {@link Response}. */
+export type AfterExecute = (ctx: AfterExecuteContext) => MaybePromise<Response>;
+
+/**
+ * Per-operation configuration. `authorization` is the policy fn; omit it to expose
+ * the op publicly (`USING true`, all columns). `beforeExecute`/`afterExecute` are
+ * optional lifecycle taps.
+ */
+export interface OperationConfig<Fn extends AnyAuthFn = AnyAuthFn> {
+  readonly authorization?: Fn;
+  readonly beforeExecute?: BeforeExecute;
+  readonly afterExecute?: AfterExecute;
+}
+
+export type SelectConfig<Col extends string = string> = OperationConfig<SelectAuthFn<Col>>;
+export type InsertConfig<Col extends string = string> = OperationConfig<InsertAuthFn<Col>>;
+export type UpdateConfig<Col extends string = string> = OperationConfig<UpdateAuthFn<Col>>;
+export type DeleteConfig<Col extends string = string> = OperationConfig<DeleteAuthFn<Col>>;
+
+export type AnyOperationConfig = OperationConfig<AnyAuthFn>;
+
+/** A mounted relation: its name plus the per-op configuration registered on it. */
 export interface RelationModule {
   readonly name: string;
-  readonly handlers: Readonly<Partial<Record<Op, AnyAuthFn>>>;
+  readonly handlers: Readonly<Partial<Record<Op, AnyOperationConfig>>>;
 }

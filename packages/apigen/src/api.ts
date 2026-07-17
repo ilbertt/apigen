@@ -1,48 +1,49 @@
 import { resolveAdapter } from './adapters/resolve.js';
 import type {
   Adapter,
-  AnyAuthFn,
+  AnyOperationConfig,
   Catalog,
   DbInput,
-  DeleteAuthFn,
-  InsertAuthFn,
+  DeleteConfig,
+  InsertConfig,
   Op,
   RelationModule,
-  SelectAuthFn,
-  UpdateAuthFn,
+  SelectConfig,
+  UpdateConfig,
 } from './contract.js';
 import { handleRequest } from './handle.js';
 
 /**
- * A `.use()`-able relation module. Each verb registers the authorization fn for
- * that op; an omitted verb denies the op. `Col` names the relation's columns for
+ * A `.use()`-able relation module. Each verb registers an {@link OperationConfig}
+ * (`authorization` plus optional `beforeExecute`/`afterExecute` hooks) for that op;
+ * an unregistered verb denies the op. `Col` names the relation's columns for
  * `allowedColumns` type-checking (bound by the generated `relation` factory).
  */
 export class Relation<Col extends string = string> implements RelationModule {
   readonly name: string;
-  readonly handlers: Partial<Record<Op, AnyAuthFn>> = {};
+  readonly handlers: Partial<Record<Op, AnyOperationConfig>> = {};
 
   constructor(name: string) {
     this.name = name;
   }
 
-  select(fn: SelectAuthFn<Col>): this {
-    this.handlers.select = fn as AnyAuthFn;
+  select(config: SelectConfig<Col>): this {
+    this.handlers.select = config as AnyOperationConfig;
     return this;
   }
 
-  insert(fn: InsertAuthFn<Col>): this {
-    this.handlers.insert = fn as AnyAuthFn;
+  insert(config: InsertConfig<Col>): this {
+    this.handlers.insert = config as AnyOperationConfig;
     return this;
   }
 
-  update(fn: UpdateAuthFn<Col>): this {
-    this.handlers.update = fn as AnyAuthFn;
+  update(config: UpdateConfig<Col>): this {
+    this.handlers.update = config as AnyOperationConfig;
     return this;
   }
 
-  delete(fn: DeleteAuthFn<Col>): this {
-    this.handlers.delete = fn as AnyAuthFn;
+  delete(config: DeleteConfig<Col>): this {
+    this.handlers.delete = config as AnyOperationConfig;
     return this;
   }
 }

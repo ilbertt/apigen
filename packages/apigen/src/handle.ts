@@ -299,22 +299,37 @@ export async function handleRequest({
       });
     }
 
+    const config = module.handlers[op];
+    if (config?.beforeExecute) {
+      await config.beforeExecute({ req, op, relation });
+    }
+
     const args = { req, url, relation, columns, module, adapter };
+    let response: Response;
     switch (op) {
       case 'select':
-        return await handleSelect(args);
+        response = await handleSelect(args);
+        break;
       case 'insert':
-        return await handleInsert(args);
+        response = await handleInsert(args);
+        break;
       case 'update':
-        return await handleUpdate(args);
+        response = await handleUpdate(args);
+        break;
       case 'delete':
-        return await handleDelete(args);
+        response = await handleDelete(args);
+        break;
       default:
         throw new ApiError({
           status: HttpStatus.MethodNotAllowed,
           message: `Unsupported operation`,
         });
     }
+
+    if (config?.afterExecute) {
+      return await config.afterExecute({ req, op, relation, response });
+    }
+    return response;
   } catch (err) {
     return errorResponse(err);
   }
