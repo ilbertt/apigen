@@ -19,10 +19,7 @@ const todos = relation('todos')
       return { policy: sql.using`owner = ${owner}::uuid` };
     },
     beforeExecute: ({ op, relation }) => {
-      void fetch('https://o11y.example/ingest', {
-        method: 'POST',
-        body: JSON.stringify({ op, relation }),
-      }).catch(() => {});
+      console.log(`Handling ${op} on ${relation}`);
     },
     afterExecute: ({ relation, response }) => {
       response.headers.set('x-apigen-relation', relation);
