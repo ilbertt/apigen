@@ -129,3 +129,4 @@ curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 | [`examples/with-express`](./examples/with-express) | The ecommerce schema mounted into an Express app via a Request/Response adapter |
 | [`examples/pg-views`](./examples/pg-views) | Exposing Postgres **views** (not tables) as read-only relations — a curated projection + an aggregate |
 | [`examples/with-hono`](./examples/with-hono) | The ecommerce schema, `app.handle` mounted into a Hono server |
+| [`examples/pg-largeobjects`](./examples/pg-largeobjects) | Streaming video from Postgres large objects with browser range requests — `video_chunk()` slices the bytes in SQL, `afterExecute` returns 206 |

@@ -27,6 +27,19 @@
         "typescript": "catalog:",
       },
     },
+    "examples/pg-largeobjects": {
+      "name": "@repo/example-pg-largeobjects",
+      "dependencies": {
+        "@repo/apigen": "workspace:*",
+        "postgres": "catalog:",
+      },
+      "devDependencies": {
+        "@electric-sql/pglite": "catalog:",
+        "@repo/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "examples/pg-views": {
       "name": "@repo/example-pg-views",
       "dependencies": {
@@ -285,6 +298,8 @@
     "@repo/apigen": ["@repo/apigen@workspace:packages/apigen"],
 
     "@repo/example-pg-functions": ["@repo/example-pg-functions@workspace:examples/pg-functions"],
+
+    "@repo/example-pg-largeobjects": ["@repo/example-pg-largeobjects@workspace:examples/pg-largeobjects"],
 
     "@repo/example-pg-views": ["@repo/example-pg-views@workspace:examples/pg-views"],
 
