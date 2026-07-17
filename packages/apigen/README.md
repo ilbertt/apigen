@@ -20,12 +20,12 @@ contains a non-relative import**. Keep it that way — compose values through th
 
 ```
 src/
-  index.ts        public entry: Apigen, relation, types      (published as ".")
-  api.ts          relation() builder + Apigen (assembly over handle)
-  contract.ts     Query, Adapter, Catalog, ParsedRequest, Policy, auth fn types
+  index.ts        public entry: Apigen, relation, func, types (published as ".")
+  api.ts          relation()/func() builders + Apigen (assembly over handle)
+  contract.ts     Query, Adapter, Catalog, FunctionCatalog, ParsedRequest, Policy, auth fn types
   parse.ts        PostgREST URL → ParsedRequest
   authorize.ts    run the policy fn, resolve the column whitelist
-  compile.ts      select/insert/update/delete → SQL   ← the injection surface
+  compile.ts      select/insert/update/delete + function calls → SQL   ← the injection surface
   handle.ts       parse → authorize → compile → adapter → Response
   http.ts         ApiError + status codes + JSON responses
   builder/        vendored sql-template-tag + ident() + using/withCheck tags
@@ -63,6 +63,7 @@ first so the bundle can't embed a stale tree.
 - `bun run codegen` — regenerate the parsh command tree
 - `bun test` — full suite against pglite-socket + a postgres.js devDependency.
   Fixtures (migrations + seed) live under `test/fixtures/`; the socket helper is
-  `test/helpers/db.ts`. The committed `test/__generated__/todos.gen.ts` is a
-  codegen fixture kept in the tsconfig include so `check:types` also typechecks
-  emitted output; the codegen test regenerates it.
+  `test/helpers/db.ts`. The committed `test/__generated__/*.gen.ts` files
+  (`todos.gen.ts`, `functions.gen.ts`) are codegen fixtures kept in the tsconfig
+  include so `check:types` also typechecks emitted output; the codegen tests
+  regenerate them.

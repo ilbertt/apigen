@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/performance/noBarrelFile: index is the only file allowed to re-export. */
 
-export { Apigen, type ApigenOptions, Relation, relation } from './api.js';
+export { Apigen, type ApigenOptions, Func, func, Relation, relation } from './api.js';
 export type { Policy, PolicyKind, PolicyTag, UsingBag, WithCheckBag } from './builder/index.js';
 export type {
   Adapter,
@@ -17,6 +17,15 @@ export type {
   DeleteConfig,
   Filter,
   FilterOp,
+  FunctionAfterExecute,
+  FunctionArgs,
+  FunctionAuthFn,
+  FunctionBeforeExecute,
+  FunctionCatalog,
+  FunctionConfig,
+  FunctionExecuteContext,
+  FunctionModule,
+  FunctionResponseContext,
   InsertAuthFn,
   InsertConfig,
   Op,

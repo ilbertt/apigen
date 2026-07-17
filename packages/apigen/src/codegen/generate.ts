@@ -1,5 +1,5 @@
 import { emit } from './emit.js';
-import { introspect } from './introspect.js';
+import { introspect, introspectFunctions } from './introspect.js';
 
 /**
  * Load PGlite lazily so codegen fails with a clear message — not an opaque module
@@ -32,7 +32,8 @@ export async function generateFromSql({
   try {
     await db.exec(migrations);
     const introspection = await introspect(db);
-    return emit({ introspection, moduleSpecifier });
+    const functions = await introspectFunctions(db);
+    return emit({ introspection, functions, moduleSpecifier });
   } finally {
     await db.close();
   }

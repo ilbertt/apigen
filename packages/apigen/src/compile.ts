@@ -8,7 +8,7 @@ import {
   type Sql,
   sql,
 } from './builder/index.js';
-import type { Filter, ParsedRequest, Query, RelationColumns } from './contract.js';
+import type { Filter, FunctionArgs, ParsedRequest, Query, RelationColumns } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
 /** Types whose `int8`/`numeric`/temporal values we surface as strings via `::text`. */
@@ -288,4 +288,36 @@ export function compileDelete({
   const where = whereClause({ policy, filters: parsed.filters, columns });
   const stmt = sql`delete from ${ident(relation)} ${where} returning ${projection({ cols: returning, columns })}`;
   return toQuery(stmt);
+}
+
+function pgTypeOfArg({ args, arg }: { args: FunctionArgs; arg: string }): string {
+  const pgType = args[arg];
+  if (pgType === undefined) {
+    internal(`Argument "${arg}" is not in the function catalog`);
+  }
+  return pgType;
+}
+
+/**
+ * Compile a `POST /rpc/<name>` call. Each body key is bound with named-argument
+ * notation (`"arg" := $n::type`) and cast to the argument's catalog type, so order
+ * is irrelevant and omitted arguments fall back to the function's defaults. `select
+ * *` uniformly surfaces scalar, composite, and set-returning results as rows.
+ */
+export function compileFunction({
+  name,
+  args,
+  body,
+}: {
+  name: string;
+  args: FunctionArgs;
+  body: Record<string, unknown>;
+}): Query {
+  const provided = Object.keys(body);
+  const namedArgs = provided.map(
+    (arg) =>
+      sql`${ident(arg)} := ${castValue({ value: body[arg] ?? null, pgType: pgTypeOfArg({ args, arg }) })}`,
+  );
+  const argList = namedArgs.length > 0 ? join({ values: namedArgs, separator: ', ' }) : empty;
+  return toQuery(sql`select * from ${ident(name)}(${argList})`);
 }

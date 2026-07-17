@@ -157,6 +157,37 @@ to the column's catalog type; a value that doesn't fit (text for an `int8`, say)
 
 Method → operation: `GET` select, `POST` insert, `PATCH` update, `DELETE` delete.
 
+## Functions
+
+Expose a Postgres function as an RPC endpoint with `func()`. A call is
+`POST /rpc/<name>` with a JSON body of arguments; apigen binds each argument by name
+and casts it to the argument's type, so order is irrelevant and omitted arguments fall
+back to the function's defaults.
+
+```ts
+import { func } from './api.gen';
+
+// public — `.execute({})` opts the function in; an unregistered function denies calls
+export const greet = func('greet').execute({});
+
+// gated — a function's authorization is a coarse boolean: may this caller run it?
+export const publish = func('publish_article').execute({
+  authorization: (req) => isAdmin(req), // false → 403; may be async
+});
+```
+
+```sh
+curl -X POST http://localhost:3000/rpc/greet \
+  -H 'content-type: application/json' -d '{"name":"World"}'
+```
+
+A function has no rows or columns to scope, so its authorization is a coarse gate
+rather than a `USING`/`WITH CHECK` policy — row-level rules belong on relations (or
+inside the function's own SQL). The `beforeExecute`/`afterExecute` hooks work the
+same, with a `{ req, functionName }` context. The result of `select * from fn(...)` is
+returned as rows, so scalar, composite, and set-returning functions all come back as a
+JSON array. Functions are called with `POST` only.
+
 ## Database
 
 Pass a live instance, not a connection string:
@@ -190,8 +221,8 @@ apigen gen [--migrations <dir>] [--out <file>] [--module <specifier>]
 
 ## Not included (yet)
 
-RPC/functions, embeds, OpenAPI generation, divergent `withCheck`, a `pg` adapter,
-and SQLite/D1 dialects are out of scope for now.
+Embeds, OpenAPI generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1
+dialects are out of scope for now.
 
 ## License
 
