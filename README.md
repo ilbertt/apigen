@@ -123,6 +123,7 @@ curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 | Example | What it shows |
 | --- | --- |
 | [`examples/simple`](./examples/simple) | The core patterns on a single `todos` table — relations, per-verb policies, `allowedColumns`; no joins |
+| [`examples/pg-functions`](./examples/pg-functions) | Exposing Postgres functions as `POST /rpc/<name>` — the `func()` factory, coarse authorization, defaulted args |
 | [`examples/with-bun`](./examples/with-bun) | The ecommerce schema with Bun's built-in SQL client |
 | [`examples/with-postgres`](./examples/with-postgres) | The ecommerce schema with postgres.js |
 | [`examples/with-elysia`](./examples/with-elysia) | The ecommerce schema, `app.handle` mounted into an Elysia server |
