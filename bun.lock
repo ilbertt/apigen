@@ -79,6 +79,19 @@
         "typescript": "catalog:",
       },
     },
+    "examples/with-hono": {
+      "name": "@repo/example-with-hono",
+      "dependencies": {
+        "@repo/apigen": "workspace:*",
+        "hono": "^4.12.30",
+      },
+      "devDependencies": {
+        "@electric-sql/pglite": "catalog:",
+        "@repo/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "examples/with-node": {
       "name": "@repo/example-with-node",
       "dependencies": {
@@ -268,6 +281,8 @@
     "@repo/example-with-elysia": ["@repo/example-with-elysia@workspace:examples/with-elysia"],
 
     "@repo/example-with-express": ["@repo/example-with-express@workspace:examples/with-express"],
+
+    "@repo/example-with-hono": ["@repo/example-with-hono@workspace:examples/with-hono"],
 
     "@repo/example-with-node": ["@repo/example-with-node@workspace:examples/with-node"],
 
@@ -516,6 +531,8 @@
     "has-symbols": ["has-symbols@1.1.0", "", {}, "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ=="],
 
     "hasown": ["hasown@2.0.4", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A=="],
+
+    "hono": ["hono@4.12.30", "", {}, "sha512-emn+JoJjrN9YTpRDS5it/UI2SO9BAE37T6I3d963RxcZ81G9A4pr2SZTEiiaiKbzx+NKRg5BZ89fCL7gCJCUog=="],
 
     "http-errors": ["http-errors@2.0.1", "", { "dependencies": { "depd": "~2.0.0", "inherits": "~2.0.4", "setprototypeof": "~1.2.0", "statuses": "~2.0.2", "toidentifier": "~1.0.1" } }, "sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ=="],
 

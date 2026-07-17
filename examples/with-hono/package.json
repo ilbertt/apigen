@@ -1,0 +1,21 @@
+{
+  "name": "@repo/example-with-hono",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "codegen": "apigen gen --migrations src/db/migrations --out src/api.gen.ts --module @repo/apigen",
+    "start:api": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "check:types": "tsc"
+  },
+  "dependencies": {
+    "@repo/apigen": "workspace:*",
+    "hono": "^4.12.30"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "@electric-sql/pglite": "catalog:"
+  }
+}
