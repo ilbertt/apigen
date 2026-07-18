@@ -79,6 +79,44 @@ interface PrimaryKeyRow {
 /** relation → its primary-key column names, in key order. Tables without a PK are absent. */
 export type PrimaryKeyIntrospection = Record<string, string[]>;
 
+/** Every foreign key of every `public` table, one row per key column, in key order. */
+const FOREIGN_KEYS_QUERY = `
+  select
+    con.conname as constraint_name,
+    cl.relname as from_table,
+    att.attname as from_column,
+    fcl.relname as to_table,
+    fatt.attname as to_column
+  from pg_constraint con
+  join pg_class cl on cl.oid = con.conrelid
+  join pg_class fcl on fcl.oid = con.confrelid
+  join pg_namespace ns on ns.oid = cl.relnamespace
+  join lateral unnest(con.conkey) with ordinality as k(attnum, ord) on true
+  join lateral unnest(con.confkey) with ordinality as fk(attnum, ord) on fk.ord = k.ord
+  join pg_attribute att on att.attrelid = con.conrelid and att.attnum = k.attnum
+  join pg_attribute fatt on fatt.attrelid = con.confrelid and fatt.attnum = fk.attnum
+  where con.contype = 'f' and ns.nspname = 'public'
+  order by con.conname, k.ord
+`;
+
+interface ForeignKeyRow {
+  constraint_name: string;
+  from_table: string;
+  from_column: string;
+  to_table: string;
+  to_column: string;
+}
+
+/** A foreign key: local `columns` reference `foreignRelation.foreignColumns`. */
+export interface IntrospectedForeignKey {
+  columns: string[];
+  foreignRelation: string;
+  foreignColumns: string[];
+}
+
+/** relation → its outgoing foreign keys. Drives resource embedding. */
+export type ForeignKeyIntrospection = Record<string, IntrospectedForeignKey[]>;
+
 interface FunctionRow {
   function_name: string;
   specific_name: string;
@@ -108,6 +146,25 @@ export async function introspectPrimaryKeys(run: RunQuery): Promise<PrimaryKeyIn
     const list = keys[row.table_name] ?? [];
     list.push(row.column_name);
     keys[row.table_name] = list;
+  }
+  return keys;
+}
+
+export async function introspectForeignKeys(run: RunQuery): Promise<ForeignKeyIntrospection> {
+  const rows = (await run(FOREIGN_KEYS_QUERY)) as ForeignKeyRow[];
+  const keys: ForeignKeyIntrospection = {};
+  const byConstraint: Record<string, IntrospectedForeignKey> = {};
+  for (const row of rows) {
+    let fk = byConstraint[row.constraint_name];
+    if (fk === undefined) {
+      fk = { columns: [], foreignRelation: row.to_table, foreignColumns: [] };
+      byConstraint[row.constraint_name] = fk;
+      const list = keys[row.from_table] ?? [];
+      list.push(fk);
+      keys[row.from_table] = list;
+    }
+    fk.columns.push(row.from_column);
+    fk.foreignColumns.push(row.to_column);
   }
   return keys;
 }

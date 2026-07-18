@@ -294,6 +294,36 @@ function assemble(parts: readonly Sql[]): Sql {
 }
 
 /**
+ * A resolved FK embed. `cardinality` decides the shape: `many` → a `jsonb_agg` array
+ * (empty → `[]`), `one` → a single `to_jsonb` object (no match → `null`). The join is
+ * `<relation>.<foreignColumn> = <base>.<localColumn>`.
+ */
+export interface EmbedPlan {
+  readonly alias: string;
+  readonly relation: string;
+  readonly cardinality: 'many' | 'one';
+  readonly localColumn: string;
+  readonly foreignColumn: string;
+  readonly columns: RelationColumns;
+  readonly select: readonly SelectItem[];
+  readonly policy: Policy;
+}
+
+/** Render an embed as a correlated jsonb subquery aliased to its output key. */
+function embedFragment({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
+  const proj = projection({ items: embed.select, columns: embed.columns });
+  const on = sql`${ident(embed.relation)}.${ident(embed.foreignColumn)} = ${ident(base)}.${ident(embed.localColumn)}`;
+  const inner = sql`select ${proj} from ${ident(embed.relation)} where ${on} and (${embed.policy.fragment})`;
+  const alias = ident(embed.alias);
+  // The embedded object renders as jsonb (Postgres sorts its keys and adds spaces),
+  // matching PostgREST — while the outer json_agg keeps it verbatim.
+  if (embed.cardinality === 'many') {
+    return sql`coalesce((select jsonb_agg(_apigen_embed) from (${inner}) _apigen_embed), '[]'::jsonb) as ${alias}`;
+  }
+  return sql`(select to_jsonb(_apigen_embed) from (${inner}) _apigen_embed) as ${alias}`;
+}
+
+/**
  * A rendered result set: `body` is the JSON text Postgres produced, `page` the
  * number of rows on this page, `total` the full match count (only when a count was
  * requested). Every compiled statement returns exactly one row of this shape.
@@ -307,6 +337,7 @@ export function compileSelect({
   policy,
   allowedColumns,
   count = false,
+  embeds = [],
 }: {
   relation: string;
   columns: RelationColumns;
@@ -314,10 +345,17 @@ export function compileSelect({
   policy: Policy;
   allowedColumns: readonly string[];
   count?: boolean;
+  embeds?: readonly EmbedPlan[];
 }): Query {
   const items = parsed.select ?? toItems(allowedColumns);
+  const colFrags = items.map((item) => projectItem({ item, columns }));
+  const embedFrags = embeds.map((embed) => embedFragment({ embed, base: relation }));
+  const projFrags = [...colFrags, ...embedFrags];
+  if (projFrags.length === 0) {
+    internal('Relation has no visible columns to project');
+  }
   const parts: Sql[] = [
-    sql`select ${projection({ items, columns })} from ${ident(relation)}`,
+    sql`select ${join({ values: projFrags, separator: ', ' })} from ${ident(relation)}`,
     whereClause({ policy, filters: parsed.filters, columns }),
     orderClause({ order: parsed.order, relation }),
   ];

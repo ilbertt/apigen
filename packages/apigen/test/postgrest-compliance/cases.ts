@@ -147,6 +147,38 @@ export const CASES: DiffCase[] = [
     path: '/orders?select=id,meta->>age::int&order=id',
   },
 
+  // resource embedding (FK joins): 1:many, many:1, aliased, empty, embed-only
+  {
+    name: 'embed 1:many (order_items)',
+    method: 'GET',
+    path: '/orders?select=id,customer,order_items(id,sku,qty)&order=id',
+  },
+  {
+    name: 'embed 1:many all cols',
+    method: 'GET',
+    path: '/orders?select=id,order_items(*)&id=eq.1',
+  },
+  {
+    name: 'embed 1:many empty (Bob has none)',
+    method: 'GET',
+    path: '/orders?select=customer,order_items(sku)&id=eq.2',
+  },
+  {
+    name: 'embed many:1 (orders)',
+    method: 'GET',
+    path: '/order_items?select=id,sku,orders(id,customer)&order=id',
+  },
+  {
+    name: 'embed aliased',
+    method: 'GET',
+    path: '/orders?select=id,items:order_items(sku)&id=eq.1',
+  },
+  {
+    name: 'embed only (no base cols)',
+    method: 'GET',
+    path: '/orders?select=order_items(sku)&id=eq.1',
+  },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },

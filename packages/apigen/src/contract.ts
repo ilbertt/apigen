@@ -37,6 +37,16 @@ export type Catalog = Record<string, RelationColumns>;
 /** Generated primary-key catalog: relation → its PK column names, in key order. */
 export type PrimaryKeys = Record<string, readonly string[]>;
 
+/** A foreign key: local `columns` reference `foreignRelation.foreignColumns`. */
+export interface ForeignKey {
+  readonly columns: readonly string[];
+  readonly foreignRelation: string;
+  readonly foreignColumns: readonly string[];
+}
+
+/** Generated foreign-key catalog: relation → its outgoing FKs. Drives resource embedding. */
+export type ForeignKeys = Record<string, readonly ForeignKey[]>;
+
 /** A callable function's named arguments → pgType, for casting the request's args. */
 export type FunctionArgs = Record<string, PgType>;
 /** The generated function catalog: function name → its argument types. */
@@ -144,10 +154,20 @@ export interface SelectItem {
   readonly path?: readonly JsonPathStep[];
 }
 
+/** An embedded relation in `select`, e.g. `order_items(id,sku)` — a FK-based nested resource. */
+export interface EmbedItem {
+  readonly relation: string;
+  readonly alias?: string;
+  /** The embedded projection; `undefined` means all of the embedded relation's columns. */
+  readonly select?: readonly SelectItem[];
+}
+
 /** PostgREST URL query parsed into structured form (parser → compiler contract). */
 export interface ParsedRequest {
   /** Requested columns; `undefined` means "all visible columns". */
   readonly select?: readonly SelectItem[];
+  /** FK-embedded relations requested in `select`, e.g. `order_items(*)`. */
+  readonly embed?: readonly EmbedItem[];
   /** Top-level conditions, implicitly AND-ed together (a `WhereNode` may be a group). */
   readonly filters: readonly WhereNode[];
   readonly order: readonly OrderTerm[];

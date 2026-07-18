@@ -6,10 +6,13 @@ import {
   compileInsert,
   compileSelect,
   compileUpdate,
+  type EmbedPlan,
 } from './compile.js';
 import {
   type Adapter,
   type Catalog,
+  type EmbedItem,
+  type ForeignKeys,
   type FunctionArgs,
   type FunctionCatalog,
   type FunctionConfig,
@@ -306,6 +309,86 @@ async function handleRpc({
   return response;
 }
 
+/** Resolve the FK linking `base` and `target` into a join spec, or undefined if none. */
+function resolveLink({
+  base,
+  target,
+  foreignKeys,
+}: {
+  base: string;
+  target: string;
+  foreignKeys: ForeignKeys;
+}): { cardinality: 'many' | 'one'; localColumn: string; foreignColumn: string } | undefined {
+  const outward = (foreignKeys[base] ?? []).find((fk) => fk.foreignRelation === target);
+  if (outward?.columns[0] !== undefined && outward.foreignColumns[0] !== undefined) {
+    return {
+      cardinality: 'one',
+      localColumn: outward.columns[0],
+      foreignColumn: outward.foreignColumns[0],
+    };
+  }
+  const inward = (foreignKeys[target] ?? []).find((fk) => fk.foreignRelation === base);
+  if (inward?.columns[0] !== undefined && inward.foreignColumns[0] !== undefined) {
+    return {
+      cardinality: 'many',
+      localColumn: inward.foreignColumns[0],
+      foreignColumn: inward.columns[0],
+    };
+  }
+  return undefined;
+}
+
+/** Turn parsed embeds into compile plans: resolve the FK, mount, authorize, and columns. */
+async function resolveEmbeds({
+  embeds,
+  base,
+  catalog,
+  modules,
+  foreignKeys,
+  req,
+}: {
+  embeds: readonly EmbedItem[];
+  base: string;
+  catalog: Catalog;
+  modules: ReadonlyMap<string, RelationModule>;
+  foreignKeys: ForeignKeys;
+  req: Request;
+}): Promise<EmbedPlan[]> {
+  const plans: EmbedPlan[] = [];
+  for (const embed of embeds) {
+    const target = embed.relation;
+    const embedModule = modules.get(target);
+    const embedColumns = catalog[target];
+    if (embedModule === undefined || embedColumns === undefined) {
+      throw new ApiError({
+        status: HttpStatus.BadRequest,
+        code: 'PGRST200',
+        message: `Could not embed "${target}": it is not an exposed relation`,
+      });
+    }
+    const link = resolveLink({ base, target, foreignKeys });
+    if (link === undefined) {
+      throw new ApiError({
+        status: HttpStatus.BadRequest,
+        code: 'PGRST200',
+        message: `Could not find a relationship between "${base}" and "${target}"`,
+      });
+    }
+    const auth = await authorize({ req, op: 'select', module: embedModule, columns: embedColumns });
+    const select = embed.select ?? auth.allowedColumns.map((column) => ({ column }));
+    ensureAllowed({ cols: select.map((item) => item.column), auth, relation: target });
+    plans.push({
+      alias: embed.alias ?? target,
+      relation: target,
+      columns: embedColumns,
+      select,
+      policy: auth.policy,
+      ...link,
+    });
+  }
+  return plans;
+}
+
 async function handleSelect({
   req,
   url,
@@ -313,6 +396,9 @@ async function handleSelect({
   columns,
   module,
   adapter,
+  catalog,
+  modules,
+  foreignKeys,
 }: {
   req: Request;
   url: URL;
@@ -320,6 +406,9 @@ async function handleSelect({
   columns: RelationColumns;
   module: RelationModule;
   adapter: Adapter;
+  catalog: Catalog;
+  modules: ReadonlyMap<string, RelationModule>;
+  foreignKeys: ForeignKeys;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'select', module, columns });
@@ -329,6 +418,17 @@ async function handleSelect({
     ...parsed.order.map((o) => o.column),
   ];
   ensureAllowed({ cols: referenced, auth, relation });
+  const embeds =
+    parsed.embed === undefined
+      ? []
+      : await resolveEmbeds({
+          embeds: parsed.embed,
+          base: relation,
+          catalog,
+          modules,
+          foreignKeys,
+          req,
+        });
   const prefs = parsePreferences(req);
   const singular = wantsSingular(req);
 
@@ -347,6 +447,7 @@ async function handleSelect({
     policy: auth.policy,
     allowedColumns: auth.allowedColumns,
     count: prefs.count,
+    embeds,
   });
   const result = await runOne({ adapter, query });
   const offset = paged.offset ?? 0;
@@ -791,6 +892,7 @@ export async function handleRequest({
   req,
   catalog,
   primaryKeys,
+  foreignKeys,
   functionCatalog,
   modules,
   functions,
@@ -799,6 +901,7 @@ export async function handleRequest({
   req: Request;
   catalog: Catalog;
   primaryKeys: PrimaryKeys;
+  foreignKeys: ForeignKeys;
   functionCatalog: FunctionCatalog;
   modules: ReadonlyMap<string, RelationModule>;
   functions: ReadonlyMap<string, FunctionModule>;
@@ -843,7 +946,18 @@ export async function handleRequest({
       await config.beforeExecute({ req, op, relation });
     }
 
-    const args = { req, url, relation, columns, module, adapter, primaryKeys };
+    const args = {
+      req,
+      url,
+      relation,
+      columns,
+      module,
+      adapter,
+      primaryKeys,
+      catalog,
+      modules,
+      foreignKeys,
+    };
     let response: Response;
     switch (op) {
       case 'select':

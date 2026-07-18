@@ -1,4 +1,5 @@
 import {
+  type EmbedItem,
   FILTER_OPS,
   type Filter,
   type FilterGroup,
@@ -85,18 +86,47 @@ function parseSelectItem(token: string): SelectItem {
   };
 }
 
-function parseSelect(raw: string | null): readonly SelectItem[] | undefined {
+/** `[alias:]relation(nested)` — an embedded relation rather than a column. */
+const EMBED_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)$/;
+
+function parseEmbed(match: RegExpExecArray): EmbedItem {
+  const alias = match[1];
+  const relation = assertColumn(match[2] ?? '');
+  // Nested column projection; nested embeds are not yet supported and are ignored.
+  const nested = parseSelect(match[3] ?? '');
+  return { relation, ...(alias !== undefined && { alias }), select: nested.columns };
+}
+
+/**
+ * Split `select` into column items and FK-embedded relations. A `*` (or absent select)
+ * means all columns; explicit column tokens otherwise (possibly none, with only embeds).
+ */
+function parseSelect(raw: string | null): {
+  columns?: readonly SelectItem[];
+  embeds: readonly EmbedItem[];
+} {
   if (raw === null) {
-    return undefined;
+    return { embeds: [] };
   }
-  const tokens = raw
-    .split(',')
+  const tokens = splitTopLevel(raw)
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
-  if (tokens.length === 0 || tokens.includes('*')) {
-    return undefined;
+  const columns: SelectItem[] = [];
+  const embeds: EmbedItem[] = [];
+  let star = tokens.length === 0;
+  for (const token of tokens) {
+    if (token === '*') {
+      star = true;
+      continue;
+    }
+    const embed = EMBED_RE.exec(token);
+    if (embed !== null) {
+      embeds.push(parseEmbed(embed));
+    } else {
+      columns.push(parseSelectItem(token));
+    }
   }
-  return tokens.map(parseSelectItem);
+  return { columns: star ? undefined : columns, embeds };
 }
 
 function stripQuotes(value: string): string {
@@ -382,8 +412,11 @@ export function parseRequest(url: URL): ParsedRequest {
           .map(assertColumn)
       : undefined;
 
+  const { columns: selectColumns, embeds } = parseSelect(params.get('select'));
+
   return {
-    select: parseSelect(params.get('select')),
+    select: selectColumns,
+    embed: embeds.length > 0 ? embeds : undefined,
     filters,
     order: parseOrder(params.get('order')),
     limit: parseNonNegativeInt({ raw: params.get('limit'), name: 'limit' }),

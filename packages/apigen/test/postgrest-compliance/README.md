@@ -61,6 +61,7 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Writes | `POST` upsert (`on_conflict`, `resolution=merge`/`ignore`; 200-on-update / 201-on-insert) | ✅ |
 | Writes | `PUT` (PK-keyed upsert) + `columns=` | ✅ |
 | Writes | `Prefer: missing=default` | 🚧 |
-| Embedding | FK resource embedding `select=*,related(*)`, `!inner`, spread | 🚧 |
+| Embedding | FK resource embedding `select=*,related(*)` — one-to-many + many-to-one | ✅ |
+| Embedding | `!inner`, spread `...table`, nested embeds, embedded filters/order | 🚧 |
 | Functions | `POST /rpc/<name>` | ✅ |
 | Negotiation | CSV, `HEAD`, `OPTIONS`, `Accept-Profile`/`Content-Profile`, OpenAPI | 🚧 |

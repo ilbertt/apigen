@@ -24,6 +24,10 @@ export const primaryKeys = {
   todos: ['id'],
 } as const;
 
+export const foreignKeys = {
+  todos: [],
+} as const;
+
 export interface Todos {
   id: string;
   owner: string;
@@ -41,6 +45,6 @@ export function relation<R extends keyof Catalog & string>(name: R): Relation<Co
 
 export class Apigen extends ApigenBase {
   constructor(options: { db: DbInput }) {
-    super({ db: options.db, catalog, primaryKeys });
+    super({ db: options.db, catalog, primaryKeys, foreignKeys });
   }
 }

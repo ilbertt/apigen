@@ -3,6 +3,7 @@ import type { DbInput } from '../contract.js';
 import { emit } from './emit.js';
 import {
   introspect,
+  introspectForeignKeys,
   introspectFunctions,
   introspectPrimaryKeys,
   type RunQuery,
@@ -42,7 +43,8 @@ export async function generateFromSql({
     const introspection = await introspect(run);
     const functions = await introspectFunctions(run);
     const primaryKeys = await introspectPrimaryKeys(run);
-    return emit({ introspection, functions, primaryKeys, moduleSpecifier });
+    const foreignKeys = await introspectForeignKeys(run);
+    return emit({ introspection, functions, primaryKeys, foreignKeys, moduleSpecifier });
   } finally {
     await db.close();
   }
@@ -64,5 +66,6 @@ export async function generateFromDb({
   const introspection = await introspect(run);
   const functions = await introspectFunctions(run);
   const primaryKeys = await introspectPrimaryKeys(run);
-  return emit({ introspection, functions, primaryKeys, moduleSpecifier });
+  const foreignKeys = await introspectForeignKeys(run);
+  return emit({ introspection, functions, primaryKeys, foreignKeys, moduleSpecifier });
 }

@@ -50,7 +50,21 @@ test('emits catalog-bound relation factory and Apigen class', () => {
 test('emits the primaryKeys catalog and threads it into the Apigen constructor', () => {
   expect(source).toContain('export const primaryKeys = {');
   expect(source).toContain("todos: ['id'],");
-  expect(source).toContain('super({ db: options.db, catalog, primaryKeys });');
+  expect(source).toContain('super({ db: options.db, catalog, primaryKeys, foreignKeys });');
+});
+
+test('emits the foreignKeys catalog', async () => {
+  const withFk = await generateFromSql({
+    migrations: `
+      create table authors (id bigint primary key);
+      create table books (id bigint primary key, author_id bigint references authors (id));
+    `,
+    moduleSpecifier: '@repo/apigen',
+  });
+  expect(withFk).toContain('export const foreignKeys = {');
+  expect(withFk).toContain(
+    "books: [{ columns: ['author_id'], foreignRelation: 'authors', foreignColumns: ['id'] }],",
+  );
 });
 
 test('the generated module works end-to-end against a live db', async () => {
