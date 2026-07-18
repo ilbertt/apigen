@@ -60,18 +60,17 @@ function parseInList(rest: string): string[] {
   return inner.split(',').map((v) => stripQuotes(v.trim()));
 }
 
-function parseFilter({ column, raw }: { column: string; raw: string }): Filter {
-  const dot = raw.indexOf('.');
-  if (dot === -1) {
-    badRequest(`Filter "${column}=${raw}" must be "op.value"`);
-  }
-  const opToken = raw.slice(0, dot);
-  const rest = raw.slice(dot + 1);
-  if (!FILTER_OP_SET.has(opToken)) {
-    badRequest(`Unsupported filter operator "${opToken}" on column "${column}"`);
-  }
-  const op = opToken as FilterOp;
+const NOT_PREFIX = 'not.';
 
+function parseOperand({
+  column,
+  op,
+  rest,
+}: {
+  column: string;
+  op: FilterOp;
+  rest: string;
+}): Filter {
   if (op === 'in') {
     return { column, op, value: rest, values: parseInList(rest) };
   }
@@ -85,7 +84,25 @@ function parseFilter({ column, raw }: { column: string; raw: string }): Filter {
   if (op === 'like' || op === 'ilike') {
     return { column, op, value: toLikePattern(rest) };
   }
+  // eq/neq/gt/gte/lt/lte/isdistinct/match/imatch: a single scalar operand. match
+  // and imatch take a POSIX regex, so `*` is NOT rewritten to `%` (that is `like`).
   return { column, op, value: stripQuotes(rest) };
+}
+
+function parseFilter({ column, raw }: { column: string; raw: string }): Filter {
+  const negated = raw.startsWith(NOT_PREFIX);
+  const body = negated ? raw.slice(NOT_PREFIX.length) : raw;
+  const dot = body.indexOf('.');
+  if (dot === -1) {
+    badRequest(`Filter "${column}=${raw}" must be "op.value"`);
+  }
+  const opToken = body.slice(0, dot);
+  const rest = body.slice(dot + 1);
+  if (!FILTER_OP_SET.has(opToken)) {
+    badRequest(`Unsupported filter operator "${opToken}" on column "${column}"`);
+  }
+  const operand = parseOperand({ column, op: opToken as FilterOp, rest });
+  return negated ? { ...operand, negated } : operand;
 }
 
 function parseOrder(raw: string | null): OrderTerm[] {

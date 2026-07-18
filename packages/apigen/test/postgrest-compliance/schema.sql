@@ -16,7 +16,8 @@ create table orders (
   amount numeric(12, 2) not null default 0,
   status text not null default 'pending',
   paid boolean not null default false,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  note text -- nullable on purpose: exercises NULL semantics (is/isdistinct/negation)
 );
 
 create table order_items (

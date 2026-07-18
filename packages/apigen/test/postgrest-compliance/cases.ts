@@ -30,6 +30,27 @@ export const CASES: DiffCase[] = [
   { name: 'filter is false', method: 'GET', path: '/orders?paid=is.false&order=id' },
   { name: 'filter like', method: 'GET', path: '/orders?customer=like.A*&order=id' },
   { name: 'filter ilike', method: 'GET', path: '/orders?customer=ilike.a*&order=id' },
+
+  // regex (match/imatch): POSIX regex, so `*` is NOT a wildcard the way like uses it
+  { name: 'filter match', method: 'GET', path: '/orders?customer=match.^A&order=id' },
+  { name: 'filter imatch', method: 'GET', path: '/orders?customer=imatch.^a&order=id' },
+
+  // NULL semantics: note is nullable (Bob is NULL). isdistinct is the NULL-safe <>,
+  // so it must include the NULL row where a plain neq would drop it.
+  { name: 'filter is null', method: 'GET', path: '/orders?note=is.null&order=id' },
+  {
+    name: 'filter isdistinct (keeps null row)',
+    method: 'GET',
+    path: '/orders?note=isdistinct.vip&order=id',
+  },
+
+  // negation: not. wraps the whole condition; NULL rows follow SQL three-valued logic
+  { name: 'filter not.eq', method: 'GET', path: '/orders?customer=not.eq.Alice&order=id' },
+  { name: 'filter not.in', method: 'GET', path: '/orders?status=not.in.(paid)&order=id' },
+  { name: 'filter not.like', method: 'GET', path: '/orders?customer=not.like.A*&order=id' },
+  { name: 'filter not.is null', method: 'GET', path: '/orders?note=not.is.null&order=id' },
+  { name: 'filter not.match', method: 'GET', path: '/orders?customer=not.match.^A&order=id' },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },
