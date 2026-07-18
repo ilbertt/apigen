@@ -160,6 +160,8 @@ export interface EmbedItem {
   readonly alias?: string;
   /** The embedded projection; `undefined` means all of the embedded relation's columns. */
   readonly select?: readonly SelectItem[];
+  /** `!inner` — an inner join: base rows without a matching embed are dropped. */
+  readonly inner?: boolean;
 }
 
 /** PostgREST URL query parsed into structured form (parser → compiler contract). */

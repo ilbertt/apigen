@@ -67,6 +67,17 @@ test('select: "*" and an absent select both mean "all columns" (undefined)', () 
   expect(parseRequest(urlFor('')).select).toBeUndefined();
 });
 
+test('select: an embed goes into the embed field, with alias and !inner', () => {
+  const parsed = parseRequest(urlFor('select=id,items:order_items(sku,qty)'));
+  expect(parsed.select).toEqual([{ column: 'id' }]);
+  expect(parsed.embed).toEqual([
+    { relation: 'order_items', alias: 'items', select: [{ column: 'sku' }, { column: 'qty' }] },
+  ]);
+  expect(parseRequest(urlFor('select=id,order_items!inner(sku)')).embed).toEqual([
+    { relation: 'order_items', inner: true, select: [{ column: 'sku' }] },
+  ]);
+});
+
 const FILTER_CASES: readonly { readonly query: string; readonly expected: Filter }[] = [
   { query: 'amount=eq.100', expected: { column: 'amount', op: 'eq', value: '100' } },
   { query: 'amount=neq.100', expected: { column: 'amount', op: 'neq', value: '100' } },

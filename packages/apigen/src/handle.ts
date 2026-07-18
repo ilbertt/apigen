@@ -392,6 +392,7 @@ async function resolveEmbeds({
       columns: embedColumns,
       select,
       policy: auth.policy,
+      ...(embed.inner && { inner: true }),
       ...link,
     });
   }

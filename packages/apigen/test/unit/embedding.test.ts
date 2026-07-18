@@ -69,6 +69,12 @@ test('many-to-one: a book embeds its author as an object (aliased)', async () =>
   ]);
 });
 
+test('!inner drops base rows that have no matching embed (Grace has no books)', async () => {
+  expect(await json('/authors?select=name,books!inner(title)&order=id')).toEqual([
+    { name: 'Ada', books: [{ title: 'Notes' }, { title: 'Essays' }] },
+  ]);
+});
+
 test('embedding an unexposed or unrelated relation is a 400', async () => {
   const notExposed = await app.handle(new Request('http://localhost/authors?select=id,nope(x)'));
   expect(notExposed.status).toBe(400);

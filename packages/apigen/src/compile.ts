@@ -307,6 +307,14 @@ export interface EmbedPlan {
   readonly columns: RelationColumns;
   readonly select: readonly SelectItem[];
   readonly policy: Policy;
+  /** `!inner` — the base row is kept only when a matching embed row exists. */
+  readonly inner?: boolean;
+}
+
+/** The `EXISTS (…)` that an `!inner` embed adds to the base WHERE to drop unmatched rows. */
+function embedExists({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
+  const on = sql`${ident(embed.relation)}.${ident(embed.foreignColumn)} = ${ident(base)}.${ident(embed.localColumn)}`;
+  return sql`exists (select 1 from ${ident(embed.relation)} where ${on} and (${embed.policy.fragment}))`;
 }
 
 /** Render an embed as a correlated jsonb subquery aliased to its output key. */
@@ -354,9 +362,17 @@ export function compileSelect({
   if (projFrags.length === 0) {
     internal('Relation has no visible columns to project');
   }
+  // `!inner` embeds add an EXISTS to the base WHERE (dropping unmatched rows), applied
+  // to both the page and the count.
+  let where = whereClause({ policy, filters: parsed.filters, columns });
+  for (const embed of embeds) {
+    if (embed.inner) {
+      where = sql`${where} and ${embedExists({ embed, base: relation })}`;
+    }
+  }
   const parts: Sql[] = [
     sql`select ${join({ values: projFrags, separator: ', ' })} from ${ident(relation)}`,
-    whereClause({ policy, filters: parsed.filters, columns }),
+    where,
     orderClause({ order: parsed.order, relation }),
   ];
   if (parsed.limit !== undefined) {
@@ -368,7 +384,7 @@ export function compileSelect({
   const page = assemble(parts);
   // `total` re-runs the filter without limit/offset — PostgREST's count=exact.
   const total = count
-    ? sql`, (select count(*)::int from ${ident(relation)} ${whereClause({ policy, filters: parsed.filters, columns })}) as total`
+    ? sql`, (select count(*)::int from ${ident(relation)} ${where}) as total`
     : empty;
   return toQuery(
     sql`select coalesce(json_agg(_apigen_rows), '[]')::text as body, count(*)::int as page${total} from (${page}) as _apigen_rows`,
