@@ -40,7 +40,7 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Area | Feature | Status |
 | --- | --- | --- |
 | Horizontal filter | `eq` `neq` `gt` `gte` `lt` `lte` `in` `is` `like` `ilike` | ✅ |
-| Horizontal filter | `not.` negation, `match` `imatch`, `isdistinct` | 🚧 |
+| Horizontal filter | `not.` negation, `match` `imatch`, `isdistinct` | ✅ |
 | Horizontal filter | full-text `fts` `plfts` `phfts` `wfts` | 🚧 |
 | Horizontal filter | array/range `cs` `cd` `ov` `sl` `sr` `nxr` `nxl` `adj` | 🚧 |
 | Horizontal filter | `any`/`all` quantifiers | 🚧 |

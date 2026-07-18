@@ -143,7 +143,8 @@ export const products = relation('products').select({
 
 ## Query parameters (PostgREST subset)
 
-`select`, the filters `eq neq gt gte lt lte in is like ilike`, `order`
+`select`, the filters `eq neq gt gte lt lte in is isdistinct like ilike match imatch`
+(each optionally negated with a `not.` prefix, e.g. `customer=not.eq.Alice`), `order`
 (`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast
 to the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a
 400 and never reaches the database.
