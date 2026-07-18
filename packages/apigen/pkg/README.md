@@ -278,13 +278,23 @@ or SQL migrations (`--migrations`, which needs `@electric-sql/pglite`). Run it w
 bunx apigen gen --help
 ```
 
+## OpenAPI
+
+Provide the `openapi` option (even `{}`) to serve a Swagger 2.0 document describing the
+mounted relations at `GET /openapi` (honor `Accept-Profile` to pick a schema); omit the
+option and `/openapi` is not served. It lives at `/openapi`, not PostgREST's `/`, whose
+document embeds PostgREST's own version string. The option's fields override the `info`
+block — `version` is omitted unless you set it:
+
+```ts
+new Apigen({ db, catalog, openapi: { title: 'My API', version: '1.0.0' } });
+```
+
 ## Not included (yet)
 
-CSV and other content types, embed modifiers (`!inner`, spread, nested), OpenAPI
-generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of
-scope for now. apigen also enforces `allowedColumns` up front (a
-`403`) instead of deferring to Postgres, so an unknown or forbidden column is rejected
-before the query runs.
+Divergent `withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of scope for now.
+apigen also enforces `allowedColumns` up front (a `403`) instead of deferring to Postgres,
+so an unknown or forbidden column is rejected before the query runs.
 
 ## License
 

@@ -279,6 +279,18 @@ export interface RelationModule {
 }
 
 /**
+ * Overrides for the `info` block of the OpenAPI document served at `/openapi`. All are
+ * optional: `title`/`description` fall back to sensible defaults, and `version` is
+ * omitted from the document entirely when unset — apigen can't reliably know its own
+ * version at runtime (its files may be relocated or bundled), so the caller supplies it.
+ */
+export interface OpenApiOptions {
+  readonly title?: string;
+  readonly version?: string;
+  readonly description?: string;
+}
+
+/**
  * Everything the engine needs to serve one schema: its generated catalog/keys and
  * the relation modules mounted under it. A single-schema app has exactly one of these
  * (the default schema); multi-schema apps have one per exposed schema, selected per
