@@ -175,6 +175,8 @@ export interface EmbedItem {
   readonly order?: readonly OrderTerm[];
   readonly limit?: number;
   readonly offset?: number;
+  /** Nested embeds inside this one, e.g. `orders(order_items(sku))`. */
+  readonly embed?: readonly EmbedItem[];
 }
 
 /** PostgREST URL query parsed into structured form (parser → compiler contract). */

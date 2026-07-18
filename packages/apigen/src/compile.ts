@@ -350,6 +350,8 @@ export interface EmbedPlan {
   readonly order?: readonly OrderTerm[];
   readonly limit?: number;
   readonly offset?: number;
+  /** Nested embeds inside this one (depth > 1), correlated on this embed's relation. */
+  readonly embeds?: readonly EmbedPlan[];
 }
 
 /** The embed's WHERE: the FK join + its policy + any embedded filters. */
@@ -377,7 +379,12 @@ function spreadFragments({ embed, base }: { embed: EmbedPlan; base: string }): S
 
 /** Render an embed as a correlated jsonb subquery aliased to its output key. */
 function embedFragment({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
-  const proj = projection({ items: embed.select, columns: embed.columns });
+  // The embed projects its own columns plus any nested embeds (correlated on itself).
+  const projFrags = [
+    ...embed.select.map((item) => projectItem({ item, columns: embed.columns })),
+    ...(embed.embeds ?? []).map((nested) => embedFragment({ embed: nested, base: embed.relation })),
+  ];
+  const proj = join({ values: projFrags, separator: ', ' });
   const inner = assemble([
     sql`select ${proj} from ${ident(embed.relation)}`,
     embedWhere({ embed, base }),
