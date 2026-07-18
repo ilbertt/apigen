@@ -266,6 +266,16 @@ test('HEAD mirrors GET headers with no body; OPTIONS lists the mounted methods',
   expect(items.headers.get('allow')).toBe('OPTIONS,GET,HEAD');
 });
 
+test('aggregates: sum / count / grouped with an implicit GROUP BY', async () => {
+  // ORG1: Alice (100.00, paid), Bob (50.50, pending).
+  const [total] = await rows(await get('/orders?select=amount.sum(),count()', ORG1));
+  expect(total).toEqual({ sum: 150.5, count: 2 });
+  expect(await rows(await get('/orders?select=status,amount.sum()&order=status', ORG1))).toEqual([
+    { status: 'paid', sum: 100 },
+    { status: 'pending', sum: 50.5 },
+  ]);
+});
+
 test('?select projects only requested columns', async () => {
   const res = await get('/orders?select=customer,amount', ORG1);
   const [row] = await rows(res);

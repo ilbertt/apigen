@@ -432,7 +432,8 @@ async function handleSelect({
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'select', module, columns });
   const referenced = [
-    ...(parsed.select?.map((item) => item.column) ?? []),
+    // `count()` has an empty column and isn't subject to the allow-list.
+    ...(parsed.select?.map((item) => item.column).filter((column) => column !== '') ?? []),
     ...filterColumns(parsed.filters),
     ...parsed.order.map((o) => o.column),
   ];

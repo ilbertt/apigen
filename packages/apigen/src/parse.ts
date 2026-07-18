@@ -1,4 +1,5 @@
 import {
+  type Aggregate,
   type EmbedItem,
   FILTER_OPS,
   type Filter,
@@ -86,6 +87,23 @@ function parseSelectItem(token: string): SelectItem {
   };
 }
 
+/** `[alias:][column.]agg()[::cast]` — an aggregate (empty parens), e.g. `amount.sum()`. */
+const AGG_RE =
+  /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?(?:([a-zA-Z_][a-zA-Z0-9_]*)\.)?(sum|avg|count|max|min)\(\)(?:::([a-zA-Z0-9_]+))?$/;
+
+function parseAggregate(match: RegExpExecArray): SelectItem {
+  const alias = match[1];
+  const column = match[2] ?? ''; // empty for count() → count(*)
+  const aggregate = match[3] as Aggregate;
+  const cast = match[4];
+  return {
+    column,
+    aggregate,
+    ...(alias !== undefined && { alias }),
+    ...(cast !== undefined && { cast }),
+  };
+}
+
 /** `[alias:]relation[!inner](nested)` — an embedded relation rather than a column. */
 const EMBED_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_]*)(!inner)?\((.*)\)$/;
 
@@ -123,6 +141,12 @@ function parseSelect(raw: string | null): {
   for (const token of tokens) {
     if (token === '*') {
       star = true;
+      continue;
+    }
+    // Aggregates (empty parens) are checked before embeds (non-empty parens).
+    const agg = AGG_RE.exec(token);
+    if (agg !== null) {
+      columns.push(parseAggregate(agg));
       continue;
     }
     const embed = EMBED_RE.exec(token);

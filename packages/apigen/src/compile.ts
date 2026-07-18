@@ -125,6 +125,19 @@ function jsonPathExpr({ base, path }: { base: Sql; path: readonly JsonPathStep[]
 }
 
 function projectItem({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
+  if (item.aggregate !== undefined) {
+    // count() aggregates over `*`; every other aggregate (and col.count()) over a column.
+    let inner: Sql;
+    if (item.column === '') {
+      inner = raw('*');
+    } else {
+      pgTypeOf({ columns, col: item.column }); // presence check
+      inner = ident(item.column);
+    }
+    const call = sql`${raw(item.aggregate)}(${inner})`;
+    const expr = item.cast === undefined ? call : sql`${call}${castSuffix(item.cast)}`;
+    return sql`${expr} as ${ident(item.alias ?? item.aggregate)}`;
+  }
   pgTypeOf({ columns, col: item.column }); // presence check against the catalog
   const base = ident(item.column);
   // A plain column projects bare so json_agg labels it by its own name (byte-identical
@@ -389,9 +402,16 @@ export function compileSelect({
       where = sql`${where} and ${embedExists({ embed, base: relation })}`;
     }
   }
+  // Any aggregate in the projection makes the non-aggregate columns the GROUP BY.
+  const grouped = items.filter((item) => item.aggregate === undefined);
+  const groupBy =
+    items.some((item) => item.aggregate !== undefined) && grouped.length > 0
+      ? sql`group by ${join({ values: grouped.map((item) => ident(item.column)), separator: ', ' })}`
+      : empty;
   const parts: Sql[] = [
     sql`select ${join({ values: projFrags, separator: ', ' })} from ${ident(relation)}`,
     where,
+    groupBy,
     orderClause({ order: parsed.order, relation }),
   ];
   if (parsed.limit !== undefined) {

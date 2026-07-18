@@ -48,7 +48,7 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Vertical filter | column projection (`select=a,b`) | ✅ |
 | Vertical filter | renaming `alias:col`, casting `col::type` | ✅ |
 | Vertical filter | JSON paths `col->k` / `col->>k` (nested, aliased, cast) | ✅ |
-| Vertical filter | aggregates `col.sum()`/`count()`/… | 🚧 |
+| Vertical filter | aggregates `col.sum()`/`count()`/`avg()`/`max()`/`min()` + implicit GROUP BY | ✅ |
 | Ordering | `order` with `asc`/`desc`/`nullsfirst`/`nullslast` | ✅ |
 | Pagination | `limit` / `offset` | ✅ |
 | Pagination | `Range` / `Range-Unit` request header | ✅ |

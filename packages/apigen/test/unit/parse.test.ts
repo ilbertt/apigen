@@ -67,6 +67,18 @@ test('select: "*" and an absent select both mean "all columns" (undefined)', () 
   expect(parseRequest(urlFor('')).select).toBeUndefined();
 });
 
+test('select: aggregates parse with column/alias/cast; count() has an empty column', () => {
+  expect(parseRequest(urlFor('select=amount.sum()')).select).toEqual([
+    { column: 'amount', aggregate: 'sum' },
+  ]);
+  expect(parseRequest(urlFor('select=count()')).select).toEqual([
+    { column: '', aggregate: 'count' },
+  ]);
+  expect(parseRequest(urlFor('select=total:amount.sum()::text')).select).toEqual([
+    { column: 'amount', aggregate: 'sum', alias: 'total', cast: 'text' },
+  ]);
+});
+
 test('select: an embed goes into the embed field, with alias and !inner', () => {
   const parsed = parseRequest(urlFor('select=id,items:order_items(sku,qty)'));
   expect(parsed.select).toEqual([{ column: 'id' }]);
