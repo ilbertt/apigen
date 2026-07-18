@@ -388,26 +388,81 @@ function parseNonNegativeInt({
   return n;
 }
 
+/** Route a query-parameter key into a top-level condition (`and`/`or` group or a filter). */
+function pushCondition({
+  filters,
+  key,
+  raw,
+}: {
+  filters: WhereNode[];
+  key: string;
+  raw: string;
+}): void {
+  const logical = LOGICAL_KEY_RE.exec(key);
+  if (logical !== null) {
+    filters.push(
+      parseTopLevelGroup({
+        op: logical[2] as 'and' | 'or',
+        negated: logical[1] !== undefined,
+        raw,
+      }),
+    );
+    return;
+  }
+  filters.push(parseFilter({ column: assertColumn(key), raw }));
+}
+
+/** Parse an embed's `<embed>.<param>` modifiers (filters/order/limit/offset). */
+function parseEmbedParams(entries: readonly (readonly [string, string])[]): {
+  filters: WhereNode[];
+  order: OrderTerm[];
+  limit?: number;
+  offset?: number;
+} {
+  const filters: WhereNode[] = [];
+  let order: OrderTerm[] = [];
+  let limit: number | undefined;
+  let offset: number | undefined;
+  for (const [sub, raw] of entries) {
+    if (sub === 'limit') {
+      limit = parseNonNegativeInt({ raw, name: 'limit' });
+    } else if (sub === 'offset') {
+      offset = parseNonNegativeInt({ raw, name: 'offset' });
+    } else if (sub === 'order') {
+      order = parseOrder(raw);
+    } else {
+      pushCondition({ filters, key: sub, raw });
+    }
+  }
+  return { filters, order, limit, offset };
+}
+
 export function parseRequest(url: URL): ParsedRequest {
   const params = url.searchParams;
+  const { columns: selectColumns, embeds } = parseSelect(params.get('select'));
+  const embedPrefixes = new Set(embeds.map((e) => e.alias ?? e.relation));
+
   const filters: WhereNode[] = [];
+  const embedEntries = new Map<string, [string, string][]>();
   for (const [key, raw] of params.entries()) {
     if (RESERVED.has(key)) {
       continue;
     }
-    const logical = LOGICAL_KEY_RE.exec(key);
-    if (logical !== null) {
-      filters.push(
-        parseTopLevelGroup({
-          op: logical[2] as 'and' | 'or',
-          negated: logical[1] !== undefined,
-          raw,
-        }),
-      );
+    const dot = key.indexOf('.');
+    const prefix = dot === -1 ? undefined : key.slice(0, dot);
+    if (prefix !== undefined && embedPrefixes.has(prefix)) {
+      const list = embedEntries.get(prefix) ?? [];
+      list.push([key.slice(dot + 1), raw]);
+      embedEntries.set(prefix, list);
       continue;
     }
-    filters.push(parseFilter({ column: assertColumn(key), raw }));
+    pushCondition({ filters, key, raw });
   }
+
+  const enriched = embeds.map((embed) => {
+    const entries = embedEntries.get(embed.alias ?? embed.relation);
+    return entries === undefined ? embed : { ...embed, ...parseEmbedParams(entries) };
+  });
 
   const columnList = (raw: string | null): readonly string[] | undefined =>
     raw
@@ -418,11 +473,9 @@ export function parseRequest(url: URL): ParsedRequest {
           .map(assertColumn)
       : undefined;
 
-  const { columns: selectColumns, embeds } = parseSelect(params.get('select'));
-
   return {
     select: selectColumns,
-    embed: embeds.length > 0 ? embeds : undefined,
+    embed: enriched.length > 0 ? enriched : undefined,
     filters,
     order: parseOrder(params.get('order')),
     limit: parseNonNegativeInt({ raw: params.get('limit'), name: 'limit' }),

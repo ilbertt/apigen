@@ -13,6 +13,7 @@ import {
   type FunctionArgs,
   isFilterGroup,
   type JsonPathStep,
+  type OrderTerm,
   type ParsedRequest,
   type Query,
   type RelationColumns,
@@ -309,19 +310,37 @@ export interface EmbedPlan {
   readonly policy: Policy;
   /** `!inner` — the base row is kept only when a matching embed row exists. */
   readonly inner?: boolean;
+  /** `<embed>.<param>` modifiers scoped to the embedded relation. */
+  readonly filters?: readonly WhereNode[];
+  readonly order?: readonly OrderTerm[];
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+/** The embed's WHERE: the FK join + its policy + any embedded filters. */
+function embedWhere({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
+  let clause = sql`where ${ident(embed.relation)}.${ident(embed.foreignColumn)} = ${ident(base)}.${ident(embed.localColumn)} and (${embed.policy.fragment})`;
+  for (const node of embed.filters ?? []) {
+    clause = sql`${clause} and ${nodeFragment({ node, columns: embed.columns })}`;
+  }
+  return clause;
 }
 
 /** The `EXISTS (…)` that an `!inner` embed adds to the base WHERE to drop unmatched rows. */
 function embedExists({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
-  const on = sql`${ident(embed.relation)}.${ident(embed.foreignColumn)} = ${ident(base)}.${ident(embed.localColumn)}`;
-  return sql`exists (select 1 from ${ident(embed.relation)} where ${on} and (${embed.policy.fragment}))`;
+  return sql`exists (select 1 from ${ident(embed.relation)} ${embedWhere({ embed, base })})`;
 }
 
 /** Render an embed as a correlated jsonb subquery aliased to its output key. */
 function embedFragment({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
   const proj = projection({ items: embed.select, columns: embed.columns });
-  const on = sql`${ident(embed.relation)}.${ident(embed.foreignColumn)} = ${ident(base)}.${ident(embed.localColumn)}`;
-  const inner = sql`select ${proj} from ${ident(embed.relation)} where ${on} and (${embed.policy.fragment})`;
+  const inner = assemble([
+    sql`select ${proj} from ${ident(embed.relation)}`,
+    embedWhere({ embed, base }),
+    orderClause({ order: embed.order ?? [], relation: embed.relation }),
+    embed.limit !== undefined ? sql`limit ${embed.limit}` : empty,
+    embed.offset !== undefined ? sql`offset ${embed.offset}` : empty,
+  ]);
   const alias = ident(embed.alias);
   // The embedded object renders as jsonb (Postgres sorts its keys and adds spaces),
   // matching PostgREST — while the outer json_agg keeps it verbatim.

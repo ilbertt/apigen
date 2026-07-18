@@ -63,7 +63,8 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Writes | `Prefer: missing=default` | 🚧 |
 | Embedding | FK resource embedding `select=*,related(*)` — one-to-many + many-to-one | ✅ |
 | Embedding | `!inner` (drop base rows with no match) | ✅ |
-| Embedding | spread `...table`, nested embeds, embedded filters/order/limit | 🚧 |
+| Embedding | embedded filters/order/limit (`<embed>.<param>`) | ✅ |
+| Embedding | spread `...table`, nested embeds (depth > 1) | 🚧 |
 | Functions | `POST /rpc/<name>` | ✅ |
 | Negotiation | `HEAD` (GET headers, no body) + `OPTIONS` (`Allow`) | ✅ |
 | Negotiation | CSV, `Accept-Profile`/`Content-Profile`, OpenAPI | 🚧 |

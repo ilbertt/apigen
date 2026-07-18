@@ -385,7 +385,12 @@ async function resolveEmbeds({
     }
     const auth = await authorize({ req, op: 'select', module: embedModule, columns: embedColumns });
     const select = embed.select ?? auth.allowedColumns.map((column) => ({ column }));
-    ensureAllowed({ cols: select.map((item) => item.column), auth, relation: target });
+    const referenced = [
+      ...select.map((item) => item.column),
+      ...filterColumns(embed.filters ?? []),
+      ...(embed.order ?? []).map((o) => o.column),
+    ];
+    ensureAllowed({ cols: referenced, auth, relation: target });
     plans.push({
       alias: embed.alias ?? target,
       relation: target,
@@ -393,6 +398,10 @@ async function resolveEmbeds({
       select,
       policy: auth.policy,
       ...(embed.inner && { inner: true }),
+      ...(embed.filters && embed.filters.length > 0 && { filters: embed.filters }),
+      ...(embed.order && embed.order.length > 0 && { order: embed.order }),
+      ...(embed.limit !== undefined && { limit: embed.limit }),
+      ...(embed.offset !== undefined && { offset: embed.offset }),
       ...link,
     });
   }
