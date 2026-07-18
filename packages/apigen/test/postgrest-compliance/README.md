@@ -57,7 +57,8 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Response | singular `application/vnd.pgrst.object+json` (`406 PGRST116`) | ✅ |
 | Response | error envelope `{code,details,hint,message}` + SQLSTATE→status | ✅ |
 | Writes | insert / update / delete, `Prefer: return=minimal\|representation` | ✅ |
-| Writes | upsert (`on_conflict`, `resolution=`), `PUT`, `columns=`, `missing=default`, `return=headers-only` | 🚧 |
+| Writes | `Prefer: return=headers-only` + PK-derived `Location` | ✅ |
+| Writes | upsert (`on_conflict`, `resolution=`), `PUT`, `columns=`, `missing=default` | 🚧 |
 | Embedding | FK resource embedding `select=*,related(*)`, `!inner`, spread | 🚧 |
 | Functions | `POST /rpc/<name>` | ✅ |
 | Negotiation | CSV, `HEAD`, `OPTIONS`, `Accept-Profile`/`Content-Profile`, OpenAPI | 🚧 |

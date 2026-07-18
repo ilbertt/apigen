@@ -47,6 +47,12 @@ test('emits catalog-bound relation factory and Apigen class', () => {
   expect(source).toContain('export class Apigen extends ApigenBase');
 });
 
+test('emits the primaryKeys catalog and threads it into the Apigen constructor', () => {
+  expect(source).toContain('export const primaryKeys = {');
+  expect(source).toContain("todos: ['id'],");
+  expect(source).toContain('super({ db: options.db, catalog, primaryKeys });');
+});
+
 test('the generated module works end-to-end against a live db', async () => {
   const gen = (await import(GENERATED_PATH)) as typeof import('./__generated__/todos.gen.ts');
   const db: TestDb = await createTestDb({

@@ -83,7 +83,8 @@ test('functions catalog maps argument names to pgTypes; no-arg function is empty
 
 test('emits a catalog-bound func factory and passes functions into Apigen', () => {
   expect(source).toContain('export function func<F extends keyof Functions & string>');
-  expect(source).toContain('super({ db: options.db, catalog, functions });');
+  expect(source).toContain('export const primaryKeys = {');
+  expect(source).toContain('super({ db: options.db, catalog, primaryKeys, functions });');
 });
 
 test('generated module: rpc returns scalar, defaulted-arg, no-arg, and set-returning rows', async () => {

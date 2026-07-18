@@ -18,8 +18,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { introspect } from '../../src/codegen/introspect.js';
-import type { Catalog } from '../../src/contract.js';
+import { introspect, introspectPrimaryKeys } from '../../src/codegen/introspect.js';
+import type { Catalog, PrimaryKeys } from '../../src/contract.js';
 import { Apigen, relation } from '../../src/index.js';
 import { connectPostgres, type Sql } from '../helpers/db.js';
 import { CASES, type DiffCase } from './cases.js';
@@ -72,9 +72,17 @@ async function introspectCatalog(db: Sql): Promise<Catalog> {
   return catalog;
 }
 
-function buildApp({ db, catalog }: { db: Sql; catalog: Catalog }): Apigen {
+function buildApp({
+  db,
+  catalog,
+  primaryKeys,
+}: {
+  db: Sql;
+  catalog: Catalog;
+  primaryKeys: PrimaryKeys;
+}): Apigen {
   const mount = (name: string) => relation(name).select({}).insert({}).update({}).delete({});
-  return new Apigen({ db, catalog })
+  return new Apigen({ db, catalog, primaryKeys })
     .use(mount('orders'))
     .use(mount('order_items'))
     .use(mount('orgs'));
@@ -142,7 +150,8 @@ describe('PostgREST compliance', () => {
     const conn = connectPostgres(APIGEN_PG_URL);
     sql = conn.sql;
     endDb = conn.end;
-    app = buildApp({ db: sql, catalog: await introspectCatalog(sql) });
+    const primaryKeys: PrimaryKeys = await introspectPrimaryKeys((text) => sql.unsafe(text));
+    app = buildApp({ db: sql, catalog: await introspectCatalog(sql), primaryKeys });
     await waitForPostgrest();
   }, STACK_UP_TIMEOUT_MS);
 

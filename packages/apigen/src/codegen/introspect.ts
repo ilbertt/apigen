@@ -52,12 +52,32 @@ const FUNCTIONS_QUERY = `
   order by r.routine_name, r.specific_name, p.ordinal_position
 `;
 
+/** Primary-key columns of every `public` table, in key order. */
+const PRIMARY_KEYS_QUERY = `
+  select tc.table_name, kcu.column_name
+  from information_schema.table_constraints tc
+  join information_schema.key_column_usage kcu
+    on kcu.constraint_name = tc.constraint_name
+    and kcu.table_schema = tc.table_schema
+  where tc.constraint_type = 'PRIMARY KEY'
+    and tc.table_schema = 'public'
+  order by tc.table_name, kcu.ordinal_position
+`;
+
 interface ColumnRow {
   table_name: string;
   column_name: string;
   udt_name: string;
   is_nullable: string;
 }
+
+interface PrimaryKeyRow {
+  table_name: string;
+  column_name: string;
+}
+
+/** relation → its primary-key column names, in key order. Tables without a PK are absent. */
+export type PrimaryKeyIntrospection = Record<string, string[]>;
 
 interface FunctionRow {
   function_name: string;
@@ -79,6 +99,17 @@ export async function introspect(run: RunQuery): Promise<Introspection> {
     });
   }
   return relations;
+}
+
+export async function introspectPrimaryKeys(run: RunQuery): Promise<PrimaryKeyIntrospection> {
+  const rows = (await run(PRIMARY_KEYS_QUERY)) as PrimaryKeyRow[];
+  const keys: PrimaryKeyIntrospection = {};
+  for (const row of rows) {
+    const list = keys[row.table_name] ?? [];
+    list.push(row.column_name);
+    keys[row.table_name] = list;
+  }
+  return keys;
 }
 
 export async function introspectFunctions(run: RunQuery): Promise<FunctionIntrospection> {

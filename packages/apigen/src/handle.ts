@@ -14,6 +14,7 @@ import type {
   FunctionConfig,
   FunctionModule,
   Op,
+  PrimaryKeys,
   RelationColumns,
   RelationModule,
 } from './contract.js';
@@ -54,7 +55,7 @@ interface Rendered {
 }
 
 interface Preferences {
-  return: 'minimal' | 'representation';
+  return: 'minimal' | 'representation' | 'headers-only';
   count: boolean;
 }
 
@@ -62,12 +63,19 @@ function badRequest(message: string): never {
   throw new ApiError({ status: HttpStatus.BadRequest, message });
 }
 
+function preferredReturn(prefer: string): Preferences['return'] {
+  if (prefer.includes('return=representation')) {
+    return 'representation';
+  }
+  if (prefer.includes('return=headers-only')) {
+    return 'headers-only';
+  }
+  return 'minimal';
+}
+
 function parsePreferences(req: Request): Preferences {
   const prefer = req.headers.get('prefer') ?? '';
-  return {
-    return: prefer.includes('return=representation') ? 'representation' : 'minimal',
-    count: prefer.includes('count=exact'),
-  };
+  return { return: preferredReturn(prefer), count: prefer.includes('count=exact') };
 }
 
 function wantsSingular(req: Request): boolean {
@@ -354,18 +362,34 @@ async function handleSelect({
   });
 }
 
+/** PostgREST's PK-derived resource URL, e.g. `/orders?id=eq.2` (composite → `&`-joined). */
+function locationFor({
+  relation,
+  pk,
+  row,
+}: {
+  relation: string;
+  pk: readonly string[];
+  row: Row;
+}): string {
+  const query = pk.map((col) => `${col}=eq.${encodeURIComponent(String(row[col]))}`).join('&');
+  return `/${relation}?${query}`;
+}
+
 function writeResponse({
   prefs,
   result,
   numerator,
   representationStatus,
   minimalStatus,
+  location,
 }: {
   prefs: Preferences;
   result: Rendered;
   numerator: string;
   representationStatus: number;
   minimalStatus: number;
+  location?: string;
 }): Response {
   const headers: Record<string, string> = {
     'content-range': contentRange({ numerator, total: null }),
@@ -373,6 +397,13 @@ function writeResponse({
   if (prefs.return === 'representation') {
     headers['preference-applied'] = 'return=representation';
     return buildResponse({ status: representationStatus, body: result.body, headers });
+  }
+  if (prefs.return === 'headers-only') {
+    headers['preference-applied'] = 'return=headers-only';
+    if (location !== undefined) {
+      headers.location = location;
+    }
+    return buildResponse({ status: minimalStatus, body: null, headers });
   }
   return buildResponse({ status: minimalStatus, body: null, headers });
 }
@@ -384,6 +415,7 @@ async function handleInsert({
   columns,
   module,
   adapter,
+  primaryKeys,
 }: {
   req: Request;
   url: URL;
@@ -391,6 +423,7 @@ async function handleInsert({
   columns: RelationColumns;
   module: RelationModule;
   adapter: Adapter;
+  primaryKeys: PrimaryKeys;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'insert', module, columns });
@@ -405,8 +438,19 @@ async function handleInsert({
   }
   ensureAllowed({ cols: insertColumns, auth, relation });
   const prefs = parsePreferences(req);
-  const returning = parsed.select ?? auth.allowedColumns.map((column) => ({ column }));
-  ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
+  const pk = primaryKeys[relation] ?? [];
+  // headers-only returns no body but needs the PK to fill Location; otherwise return
+  // the representation columns (used only when the client asked for them).
+  const wantLocation = prefs.return === 'headers-only' && pk.length > 0;
+  const returning = wantLocation
+    ? pk.map((column) => ({ column }))
+    : (parsed.select ?? auth.allowedColumns.map((column) => ({ column })));
+  // The PK behind a headers-only Location is internal (it names the created resource
+  // in a header, not the body), so it isn't subject to the column allow-list — but a
+  // client-visible representation is.
+  if (!wantLocation) {
+    ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
+  }
 
   const { query, rowCount } = compileInsert({
     relation,
@@ -426,6 +470,9 @@ async function handleInsert({
     }
     return rendered;
   });
+  const inserted = wantLocation ? (JSON.parse(result.body) as Row[])[0] : undefined;
+  const location =
+    inserted === undefined ? undefined : locationFor({ relation, pk, row: inserted });
   // POST is 201 whether or not the body is returned; PostgREST reports no row range.
   return writeResponse({
     prefs,
@@ -433,6 +480,7 @@ async function handleInsert({
     numerator: '*',
     representationStatus: HttpStatus.Created,
     minimalStatus: HttpStatus.Created,
+    location,
   });
 }
 
@@ -588,6 +636,7 @@ function errorResponse(err: unknown): Response {
 export async function handleRequest({
   req,
   catalog,
+  primaryKeys,
   functionCatalog,
   modules,
   functions,
@@ -595,6 +644,7 @@ export async function handleRequest({
 }: {
   req: Request;
   catalog: Catalog;
+  primaryKeys: PrimaryKeys;
   functionCatalog: FunctionCatalog;
   modules: ReadonlyMap<string, RelationModule>;
   functions: ReadonlyMap<string, FunctionModule>;
@@ -639,7 +689,7 @@ export async function handleRequest({
       await config.beforeExecute({ req, op, relation });
     }
 
-    const args = { req, url, relation, columns, module, adapter };
+    const args = { req, url, relation, columns, module, adapter, primaryKeys };
     let response: Response;
     switch (op) {
       case 'select':

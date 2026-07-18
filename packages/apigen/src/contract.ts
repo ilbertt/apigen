@@ -34,6 +34,9 @@ export type RelationColumns = Record<string, PgType>;
 /** The generated catalog: relation → column → pgType. Engine's only type source. */
 export type Catalog = Record<string, RelationColumns>;
 
+/** Generated primary-key catalog: relation → its PK column names, in key order. */
+export type PrimaryKeys = Record<string, readonly string[]>;
+
 /** A callable function's named arguments → pgType, for casting the request's args. */
 export type FunctionArgs = Record<string, PgType>;
 /** The generated function catalog: function name → its argument types. */
