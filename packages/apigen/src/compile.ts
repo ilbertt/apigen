@@ -30,6 +30,21 @@ const FTS_FN: Record<string, string> = {
   wfts: 'websearch_to_tsquery',
 };
 
+/**
+ * Array/range operators: `col <symbol> value`, with the value cast to the column's
+ * own type (the `{…}` array or `[…)` range literal from the URL binds straight to it).
+ */
+const SET_OP_SQL: Record<string, string> = {
+  cs: '@>', // contains
+  cd: '<@', // contained by
+  ov: '&&', // overlaps
+  sl: '<<', // strictly left of
+  sr: '>>', // strictly right of
+  nxr: '&<', // does not extend to the right of
+  nxl: '&>', // does not extend to the left of
+  adj: '-|-', // adjacent to
+};
+
 const CAST_TYPE_RE = /^[a-zA-Z0-9_]+$/;
 
 /** RETURNING sentinel used only by update's WITH CHECK re-verification. */
@@ -114,6 +129,15 @@ function filterCondition({ filter, id, pgType }: { filter: Filter; id: Sql; pgTy
           : sql`${fn}(${filter.config}::regconfig, ${filter.value}::text)`;
       return sql`${id} @@ ${tsquery}`;
     }
+    case 'cs':
+    case 'cd':
+    case 'ov':
+    case 'sl':
+    case 'sr':
+    case 'nxr':
+    case 'nxl':
+    case 'adj':
+      return sql`${id} ${raw(SET_OP_SQL[filter.op] as string)} ${castValue({ value: filter.value, pgType })}`;
     case 'is':
       return sql`${id} is ${raw(filter.value)}`;
     case 'in': {

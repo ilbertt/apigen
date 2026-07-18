@@ -59,6 +59,14 @@ export const FILTER_OPS = [
   'plfts',
   'phfts',
   'wfts',
+  'cs',
+  'cd',
+  'ov',
+  'sl',
+  'sr',
+  'nxr',
+  'nxl',
+  'adj',
 ] as const;
 export type FilterOp = (typeof FILTER_OPS)[number];
 

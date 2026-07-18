@@ -18,7 +18,9 @@ create table orders (
   paid boolean not null default false,
   created_at timestamptz not null default now(),
   note text, -- nullable on purpose: exercises NULL semantics (is/isdistinct/negation)
-  description text not null default '' -- prose for full-text search (fts/plfts/phfts/wfts)
+  description text not null default '', -- prose for full-text search (fts/plfts/phfts/wfts)
+  tags text[] not null default '{}', -- array for containment/overlap (cs/cd/ov)
+  span int4range -- range for range operators (cs/cd/ov/sl/sr/nxr/nxl/adj)
 );
 
 create table order_items (

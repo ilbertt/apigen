@@ -63,6 +63,20 @@ export const CASES: DiffCase[] = [
   { name: 'filter wfts', method: 'GET', path: '/orders?description=wfts.car&order=id' },
   { name: 'filter not.fts', method: 'GET', path: '/orders?description=not.fts.red&order=id' },
 
+  // array operators over `tags` (Alice {vip,priority}, Bob {}, Carol {vip})
+  { name: 'filter cs (array contains)', method: 'GET', path: '/orders?tags=cs.{vip}&order=id' },
+  { name: 'filter cd (array contained)', method: 'GET', path: '/orders?tags=cd.{vip}&order=id' },
+  { name: 'filter ov (array overlap)', method: 'GET', path: '/orders?tags=ov.{priority}&order=id' },
+  { name: 'filter not.cs (array)', method: 'GET', path: '/orders?tags=not.cs.{vip}&order=id' },
+
+  // range operators over `span` (Alice [1,10), Bob [5,15), Carol [20,30))
+  { name: 'filter cs (range contains)', method: 'GET', path: '/orders?span=cs.[2,5)&order=id' },
+  { name: 'filter sl (strictly left)', method: 'GET', path: '/orders?span=sl.[20,30)&order=id' },
+  { name: 'filter sr (strictly right)', method: 'GET', path: '/orders?span=sr.[1,3)&order=id' },
+  { name: 'filter nxr (not right of)', method: 'GET', path: '/orders?span=nxr.[10,20)&order=id' },
+  { name: 'filter nxl (not left of)', method: 'GET', path: '/orders?span=nxl.[10,20)&order=id' },
+  { name: 'filter adj (adjacent)', method: 'GET', path: '/orders?span=adj.[10,20)&order=id' },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },
