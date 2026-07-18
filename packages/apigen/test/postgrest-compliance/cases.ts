@@ -2,8 +2,8 @@
  * Request specs for PostgREST compliance. Each case is fired at both a real
  * PostgREST and at apigen in-process (see compliance.test.ts) and asserted to match
  * byte-for-byte. Every case is a behavior apigen guarantees to match; intentional
- * divergences (logical operators, CSV, up-front allowedColumns) are out of scope —
- * documented in the README, not parked here as skipped tests.
+ * divergences (CSV, embeds, up-front allowedColumns) are out of scope — documented in
+ * the README, not parked here as skipped tests.
  */
 export interface DiffCase {
   readonly name: string;
@@ -83,6 +83,39 @@ export const CASES: DiffCase[] = [
   { name: 'filter like(all)', method: 'GET', path: '/orders?customer=like(all).{A*,*e}&order=id' },
   { name: 'filter gt(all)', method: 'GET', path: '/orders?amount=gt(all).{50,90}&order=id' },
   { name: 'filter not.eq(any)', method: 'GET', path: '/orders?id=not.eq(any).{1}&order=id' },
+
+  // logical operators: or / and, a nested group, negation, in() inside a group, and a
+  // top-level filter AND-ed with an or-group
+  {
+    name: 'logical or',
+    method: 'GET',
+    path: '/orders?or=(customer.eq.Alice,customer.eq.Carol)&order=id',
+  },
+  {
+    name: 'logical and',
+    method: 'GET',
+    path: '/orders?and=(status.eq.paid,paid.is.true)&order=id',
+  },
+  {
+    name: 'logical or with in()',
+    method: 'GET',
+    path: '/orders?or=(status.in.(paid),customer.eq.Bob)&order=id',
+  },
+  {
+    name: 'logical nested and inside or',
+    method: 'GET',
+    path: '/orders?or=(customer.eq.Alice,and(amount.gt.900,paid.is.true))&order=id',
+  },
+  {
+    name: 'logical not.and',
+    method: 'GET',
+    path: '/orders?not.and=(status.eq.paid,paid.is.true)&order=id',
+  },
+  {
+    name: 'logical or plus top-level filter',
+    method: 'GET',
+    path: '/orders?status=eq.paid&or=(customer.eq.Alice,customer.eq.Bob)&order=id',
+  },
 
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },

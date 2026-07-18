@@ -207,6 +207,57 @@ test('an any/all quantifier on a non-quantifiable operator is a 400', () => {
   expectBadRequest(() => parseRequest(urlFor('id=in(any).{1,2}')));
 });
 
+test('logical: or builds a group of leaf filters', () => {
+  expect(parseRequest(urlFor('or=(customer.eq.Alice,amount.gt.100)')).filters).toEqual([
+    {
+      op: 'or',
+      children: [
+        { column: 'customer', op: 'eq', value: 'Alice' },
+        { column: 'amount', op: 'gt', value: '100' },
+      ],
+    },
+  ]);
+});
+
+test('logical: not.and negates the group', () => {
+  expect(parseRequest(urlFor('not.and=(status.eq.paid,paid.is.true)')).filters).toEqual([
+    {
+      op: 'and',
+      negated: true,
+      children: [
+        { column: 'status', op: 'eq', value: 'paid' },
+        { column: 'paid', op: 'is', value: 'true' },
+      ],
+    },
+  ]);
+});
+
+test('logical: a nested group and an embedded in() list parse depth-aware', () => {
+  expect(parseRequest(urlFor('or=(status.in.(a,b),and(x.eq.1,y.eq.2))')).filters).toEqual([
+    {
+      op: 'or',
+      children: [
+        { column: 'status', op: 'in', value: '(a,b)', values: ['a', 'b'] },
+        {
+          op: 'and',
+          children: [
+            { column: 'x', op: 'eq', value: '1' },
+            { column: 'y', op: 'eq', value: '2' },
+          ],
+        },
+      ],
+    },
+  ]);
+});
+
+test('an empty logical group is a 400', () => {
+  expectBadRequest(() => parseRequest(urlFor('or=()')));
+});
+
+test('a logical group without parentheses is a 400', () => {
+  expectBadRequest(() => parseRequest(urlFor('or=customer.eq.Alice')));
+});
+
 test('an empty "in" list is a 400', () => {
   expectBadRequest(() => parseRequest(urlFor('customer=in.()')));
 });

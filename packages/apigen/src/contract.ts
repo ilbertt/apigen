@@ -102,6 +102,21 @@ export const QUANTIFIABLE_OPS = [
   'imatch',
 ] as const;
 
+/** A logical grouping of conditions: `and=(…)` / `or=(…)`, optionally `not.`-negated. */
+export interface FilterGroup {
+  readonly op: 'and' | 'or';
+  readonly negated?: boolean;
+  readonly children: readonly WhereNode[];
+}
+
+/** A node in the WHERE tree: a leaf {@link Filter} or a nested {@link FilterGroup}. */
+export type WhereNode = Filter | FilterGroup;
+
+/** Narrow a {@link WhereNode} to a {@link FilterGroup}. */
+export function isFilterGroup(node: WhereNode): node is FilterGroup {
+  return 'children' in node;
+}
+
 export interface OrderTerm {
   readonly column: string;
   readonly ascending: boolean;
@@ -112,7 +127,8 @@ export interface OrderTerm {
 export interface ParsedRequest {
   /** Requested columns; `undefined` means "all visible columns". */
   readonly select?: readonly string[];
-  readonly filters: readonly Filter[];
+  /** Top-level conditions, implicitly AND-ed together (a `WhereNode` may be a group). */
+  readonly filters: readonly WhereNode[];
   readonly order: readonly OrderTerm[];
   readonly limit?: number;
   readonly offset?: number;

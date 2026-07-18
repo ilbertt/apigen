@@ -170,6 +170,17 @@ test('filters: any/all quantifiers apply the operator across a {…} list', asyn
   expect(await customers('/orders?amount=gt(all).{40,60}')).toEqual(['Alice']);
 });
 
+test('filters: logical or/and/not.and compose with the policy', async () => {
+  const customers = async (query: string): Promise<unknown[]> =>
+    (await rows(await get(query, ORG1))).map((r) => r.customer);
+  // ORG1 rows: Alice (paid, true), Bob (pending, false).
+  expect(
+    await customers('/orders?or=(customer.eq.Alice,customer.eq.Bob)&order=customer.asc'),
+  ).toEqual(['Alice', 'Bob']);
+  expect(await customers('/orders?and=(status.eq.paid,paid.is.true)')).toEqual(['Alice']);
+  expect(await customers('/orders?not.and=(status.eq.paid,paid.is.true)')).toEqual(['Bob']);
+});
+
 test('order / limit / offset', async () => {
   const res = await get('/orders?order=amount.desc&limit=1', ORG1);
   expect((await rows(res)).map((r) => r.customer)).toEqual(['Alice']);

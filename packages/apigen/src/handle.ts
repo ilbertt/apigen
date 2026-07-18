@@ -18,7 +18,7 @@ import type {
   RelationModule,
 } from './contract.js';
 import { ApiError, buildResponse, HttpStatus, jsonError } from './http.js';
-import { parseRequest } from './parse.js';
+import { filterColumns, parseRequest } from './parse.js';
 
 const METHOD_OP: Record<string, Op> = {
   GET: 'select',
@@ -268,7 +268,7 @@ async function handleSelect({
   const auth = await authorize({ req, op: 'select', module, columns });
   const referenced = [
     ...(parsed.select ?? []),
-    ...parsed.filters.map((f) => f.column),
+    ...filterColumns(parsed.filters),
     ...parsed.order.map((o) => o.column),
   ];
   ensureAllowed({ cols: referenced, auth, relation });
@@ -427,7 +427,7 @@ async function handleUpdate({
     badRequest('Update body must set at least one column');
   }
   ensureAllowed({ cols: setColumns, auth, relation });
-  ensureCatalog({ cols: parsed.filters.map((f) => f.column), columns, relation });
+  ensureCatalog({ cols: filterColumns(parsed.filters), columns, relation });
   const prefs = parsePreferences(req);
   const returning = parsed.select ?? auth.allowedColumns;
   ensureAllowed({ cols: returning, auth, relation });
@@ -481,7 +481,7 @@ async function handleDelete({
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'delete', module, columns });
-  ensureCatalog({ cols: parsed.filters.map((f) => f.column), columns, relation });
+  ensureCatalog({ cols: filterColumns(parsed.filters), columns, relation });
   const prefs = parsePreferences(req);
   const returning = parsed.select ?? auth.allowedColumns;
   ensureAllowed({ cols: returning, auth, relation });

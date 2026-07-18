@@ -8,7 +8,15 @@ import {
   type Sql,
   sql,
 } from './builder/index.js';
-import type { Filter, FunctionArgs, ParsedRequest, Query, RelationColumns } from './contract.js';
+import {
+  type Filter,
+  type FunctionArgs,
+  isFilterGroup,
+  type ParsedRequest,
+  type Query,
+  type RelationColumns,
+  type WhereNode,
+} from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
 const JSON_TYPES = new Set(['json', 'jsonb']);
@@ -200,18 +208,27 @@ function filterFragment({ filter, columns }: { filter: Filter; columns: Relation
   return filter.negated ? sql`not (${condition})` : condition;
 }
 
+function nodeFragment({ node, columns }: { node: WhereNode; columns: RelationColumns }): Sql {
+  if (!isFilterGroup(node)) {
+    return filterFragment({ filter: node, columns });
+  }
+  const parts = node.children.map((child) => nodeFragment({ node: child, columns }));
+  const grouped = sql`(${join({ values: parts, separator: node.op === 'or' ? ' or ' : ' and ' })})`;
+  return node.negated ? sql`not ${grouped}` : grouped;
+}
+
 function whereClause({
   policy,
   filters,
   columns,
 }: {
   policy: Policy;
-  filters: readonly Filter[];
+  filters: readonly WhereNode[];
   columns: RelationColumns;
 }): Sql {
   let clause = sql`where (${policy.fragment})`;
-  for (const filter of filters) {
-    clause = sql`${clause} and ${filterFragment({ filter, columns })}`;
+  for (const node of filters) {
+    clause = sql`${clause} and ${nodeFragment({ node, columns })}`;
   }
   return clause;
 }

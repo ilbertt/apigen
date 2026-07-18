@@ -1,11 +1,14 @@
 import {
   FILTER_OPS,
   type Filter,
+  type FilterGroup,
   type FilterOp,
   FTS_OPS,
+  isFilterGroup,
   type OrderTerm,
   type ParsedRequest,
   QUANTIFIABLE_OPS,
+  type WhereNode,
 } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
@@ -17,6 +20,10 @@ const QUANTIFIABLE_OP_SET = new Set<string>(QUANTIFIABLE_OPS);
 const QUANTIFIERS = new Set(['any', 'all']);
 /** `op` or `op(x)` followed by `.` — the parens tolerate dots (`pg_catalog.english`). */
 const OP_RE = /^([a-zA-Z]+)(?:\(([^)]*)\))?\./;
+/** A top-level `and`/`or`/`not.and`/`not.or` query-parameter key. */
+const LOGICAL_KEY_RE = /^(not\.)?(and|or)$/;
+/** A nested logical node inside a group: `and(…)` / `or(…)` / `not.and(…)` / `not.or(…)`. */
+const NESTED_LOGICAL_RE = /^(not\.)?(and|or)\((.*)\)$/;
 const IS_VALUES = new Set(['null', 'true', 'false', 'unknown']);
 const COLUMN_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -161,6 +168,91 @@ function parseOperandWithParen({
   badRequest(`Operator "${op}" does not take a "(${paren})"`);
 }
 
+/** Split on top-level commas only — commas nested in (), {} or [] stay put. */
+function splitTopLevel(s: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '(' || c === '{' || c === '[') {
+      depth += 1;
+    } else if (c === ')' || c === '}' || c === ']') {
+      depth -= 1;
+    } else if (c === ',' && depth === 0) {
+      parts.push(s.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+
+/** A single condition inside a logical group: a nested group or a `column.op.value` filter. */
+function parseNode(token: string): WhereNode {
+  const nested = NESTED_LOGICAL_RE.exec(token);
+  if (nested !== null) {
+    return buildGroup({
+      op: nested[2] as 'and' | 'or',
+      negated: nested[1] !== undefined,
+      inner: nested[3] ?? '',
+    });
+  }
+  const dot = token.indexOf('.');
+  if (dot === -1) {
+    badRequest(`Condition "${token}" must be "column.operator.value"`);
+  }
+  return parseFilter({ column: assertColumn(token.slice(0, dot)), raw: token.slice(dot + 1) });
+}
+
+function buildGroup({
+  op,
+  negated,
+  inner,
+}: {
+  op: 'and' | 'or';
+  negated: boolean;
+  inner: string;
+}): FilterGroup {
+  const tokens = splitTopLevel(inner)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) {
+    badRequest(`"${op}" must contain at least one condition`);
+  }
+  const children = tokens.map(parseNode);
+  return negated ? { op, negated, children } : { op, children };
+}
+
+/** Parse a top-level `and=(…)` / `or=(…)` (optionally `not.`-prefixed) parameter. */
+function parseTopLevelGroup({
+  op,
+  negated,
+  raw,
+}: {
+  op: 'and' | 'or';
+  negated: boolean;
+  raw: string;
+}): FilterGroup {
+  if (!(raw.startsWith('(') && raw.endsWith(')'))) {
+    badRequest(`"${op}" must be a parenthesized list, e.g. ${op}=(a.eq.1,b.eq.2)`);
+  }
+  return buildGroup({ op, negated, inner: raw.slice(1, -1) });
+}
+
+/** Every column referenced anywhere in the WHERE tree (for the authorization check). */
+export function filterColumns(nodes: readonly WhereNode[]): string[] {
+  const columns: string[] = [];
+  for (const node of nodes) {
+    if (isFilterGroup(node)) {
+      columns.push(...filterColumns(node.children));
+    } else {
+      columns.push(node.column);
+    }
+  }
+  return columns;
+}
+
 function parseOrder(raw: string | null): OrderTerm[] {
   if (raw === null) {
     return [];
@@ -215,9 +307,20 @@ function parseNonNegativeInt({
 
 export function parseRequest(url: URL): ParsedRequest {
   const params = url.searchParams;
-  const filters: Filter[] = [];
+  const filters: WhereNode[] = [];
   for (const [key, raw] of params.entries()) {
     if (RESERVED.has(key)) {
+      continue;
+    }
+    const logical = LOGICAL_KEY_RE.exec(key);
+    if (logical !== null) {
+      filters.push(
+        parseTopLevelGroup({
+          op: logical[2] as 'and' | 'or',
+          negated: logical[1] !== undefined,
+          raw,
+        }),
+      );
       continue;
     }
     filters.push(parseFilter({ column: assertColumn(key), raw }));
