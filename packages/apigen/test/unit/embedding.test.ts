@@ -84,6 +84,13 @@ test('embedded filter/order/limit scope the nested query', async () => {
   ).toEqual([{ name: 'Ada', books: [{ title: 'Essays' }] }]);
 });
 
+test('spread ...table flattens a to-one parent into the base row', async () => {
+  expect(await json('/books?select=title,...authors(name)&order=id')).toEqual([
+    { title: 'Notes', name: 'Ada' },
+    { title: 'Essays', name: 'Ada' },
+  ]);
+});
+
 test('embedding an unexposed or unrelated relation is a 400', async () => {
   const notExposed = await app.handle(new Request('http://localhost/authors?select=id,nope(x)'));
   expect(notExposed.status).toBe(400);

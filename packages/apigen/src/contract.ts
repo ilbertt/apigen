@@ -168,6 +168,8 @@ export interface EmbedItem {
   readonly select?: readonly SelectItem[];
   /** `!inner` — an inner join: base rows without a matching embed are dropped. */
   readonly inner?: boolean;
+  /** `...table` — spread: flatten the (to-one) embedded columns into the base row. */
+  readonly spread?: boolean;
   /** Modifiers scoped to this embed via `<embed>.<param>` (filters/order/limit/offset). */
   readonly filters?: readonly WhereNode[];
   readonly order?: readonly OrderTerm[];
