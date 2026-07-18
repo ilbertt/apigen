@@ -188,7 +188,8 @@ number, and `timestamptz` as ISO-8601.
 - **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
   `406` (`PGRST116`) when the result isn't exactly one row.
 - **CSV**: `Accept: text/csv` returns the rows as CSV (header row + text values, RFC-4180
-  quoting, `null` → empty) instead of JSON.
+  quoting, `null` → empty) instead of JSON. A `Content-Type: text/csv` insert body works the
+  other way — the header names the columns and each line is a row.
 - **Errors** use PostgREST's envelope, `{ code, details, hint, message }`, passing the
   Postgres `SQLSTATE` through on database errors.
 

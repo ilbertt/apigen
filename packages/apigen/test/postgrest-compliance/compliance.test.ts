@@ -114,18 +114,15 @@ async function waitForPostgrest(): Promise<void> {
 
 function buildHeaders(c: DiffCase): Record<string, string> {
   const headers: Record<string, string> = { ...(c.headers ?? {}) };
-  if (c.body !== undefined && !('content-type' in headers)) {
+  if (c.body !== undefined && c.rawBody === undefined && !('content-type' in headers)) {
     headers['content-type'] = 'application/json';
   }
   return headers;
 }
 
 function requestInit(c: DiffCase): RequestInit {
-  return {
-    method: c.method,
-    headers: buildHeaders(c),
-    body: c.body === undefined ? undefined : JSON.stringify(c.body),
-  };
+  const body = c.rawBody ?? (c.body === undefined ? undefined : JSON.stringify(c.body));
+  return { method: c.method, headers: buildHeaders(c), body };
 }
 
 async function normalize(res: Response): Promise<Snapshot> {
