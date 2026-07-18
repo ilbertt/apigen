@@ -76,9 +76,7 @@ function projection({ cols, columns }: { cols: readonly string[]; columns: Relat
   return join({ values: frags, separator: ', ' });
 }
 
-function filterFragment({ filter, columns }: { filter: Filter; columns: RelationColumns }): Sql {
-  const id = ident(filter.column);
-  const pgType = pgTypeOf({ columns, col: filter.column });
+function filterCondition({ filter, id, pgType }: { filter: Filter; id: Sql; pgType: string }): Sql {
   switch (filter.op) {
     case 'eq':
     case 'neq':
@@ -87,10 +85,16 @@ function filterFragment({ filter, columns }: { filter: Filter; columns: Relation
     case 'lt':
     case 'lte':
       return sql`${id} ${raw(SCALAR_OP_SQL[filter.op] as string)} ${castValue({ value: filter.value, pgType })}`;
+    case 'isdistinct':
+      return sql`${id} is distinct from ${castValue({ value: filter.value, pgType })}`;
     case 'like':
       return sql`${id} like ${filter.value}::text`;
     case 'ilike':
       return sql`${id} ilike ${filter.value}::text`;
+    case 'match':
+      return sql`${id} ~ ${filter.value}::text`;
+    case 'imatch':
+      return sql`${id} ~* ${filter.value}::text`;
     case 'is':
       return sql`${id} is ${raw(filter.value)}`;
     case 'in': {
@@ -107,6 +111,13 @@ function filterFragment({ filter, columns }: { filter: Filter; columns: Relation
     default:
       return internal(`Unhandled filter operator "${filter.op as string}"`);
   }
+}
+
+function filterFragment({ filter, columns }: { filter: Filter; columns: RelationColumns }): Sql {
+  const id = ident(filter.column);
+  const pgType = pgTypeOf({ columns, col: filter.column });
+  const condition = filterCondition({ filter, id, pgType });
+  return filter.negated ? sql`not (${condition})` : condition;
 }
 
 function whereClause({

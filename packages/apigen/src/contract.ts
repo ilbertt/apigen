@@ -50,8 +50,11 @@ export const FILTER_OPS = [
   'lte',
   'in',
   'is',
+  'isdistinct',
   'like',
   'ilike',
+  'match',
+  'imatch',
 ] as const;
 export type FilterOp = (typeof FILTER_OPS)[number];
 
@@ -62,6 +65,8 @@ export interface Filter {
   readonly value: string;
   /** Present only for `in` — the parsed list members. */
   readonly values?: readonly string[];
+  /** `not.` prefix — the whole condition is wrapped in SQL `NOT (…)`. */
+  readonly negated?: boolean;
 }
 
 export interface OrderTerm {

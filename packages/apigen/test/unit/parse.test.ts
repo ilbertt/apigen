@@ -47,6 +47,36 @@ const FILTER_CASES: readonly { readonly query: string; readonly expected: Filter
   { query: 'paid=is.TRUE', expected: { column: 'paid', op: 'is', value: 'true' } },
   { query: 'customer=like.*Bob*', expected: { column: 'customer', op: 'like', value: '%Bob%' } },
   { query: 'customer=ilike.*bob*', expected: { column: 'customer', op: 'ilike', value: '%bob%' } },
+  // match/imatch take a POSIX regex verbatim — `*` stays `*`, unlike like/ilike.
+  {
+    query: 'customer=match.^A.*e$',
+    expected: { column: 'customer', op: 'match', value: '^A.*e$' },
+  },
+  { query: 'customer=imatch.^a', expected: { column: 'customer', op: 'imatch', value: '^a' } },
+  { query: 'note=isdistinct.vip', expected: { column: 'note', op: 'isdistinct', value: 'vip' } },
+  // not. prefix sets `negated`; the operator underneath parses exactly as it would bare.
+  {
+    query: 'customer=not.eq.Alice',
+    expected: { column: 'customer', op: 'eq', value: 'Alice', negated: true },
+  },
+  {
+    query: 'paid=not.is.null',
+    expected: { column: 'paid', op: 'is', value: 'null', negated: true },
+  },
+  {
+    query: 'customer=not.in.(Alice,Bob)',
+    expected: {
+      column: 'customer',
+      op: 'in',
+      value: '(Alice,Bob)',
+      values: ['Alice', 'Bob'],
+      negated: true,
+    },
+  },
+  {
+    query: 'customer=not.like.A*',
+    expected: { column: 'customer', op: 'like', value: 'A%', negated: true },
+  },
 ];
 
 for (const { query, expected } of FILTER_CASES) {

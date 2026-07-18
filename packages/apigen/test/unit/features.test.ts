@@ -138,6 +138,18 @@ test('filters: eq / gte / in / like compose onto the policy', async () => {
   ]);
 });
 
+test('filters: match / imatch / isdistinct / negation compose onto the policy', async () => {
+  const customers = async (query: string): Promise<unknown[]> =>
+    (await rows(await get(query, ORG1))).map((r) => r.customer);
+  // ORG1 rows: Alice (paid, true), Bob (pending, false).
+  expect(await customers('/orders?customer=match.^A')).toEqual(['Alice']);
+  expect(await customers('/orders?customer=imatch.^a')).toEqual(['Alice']);
+  expect(await customers('/orders?customer=isdistinct.Alice')).toEqual(['Bob']);
+  expect(await customers('/orders?customer=not.eq.Alice')).toEqual(['Bob']);
+  expect(await customers('/orders?customer=not.like.A*')).toEqual(['Bob']);
+  expect(await customers('/orders?paid=not.is.true')).toEqual(['Bob']);
+});
+
 test('order / limit / offset', async () => {
   const res = await get('/orders?order=amount.desc&limit=1', ORG1);
   expect((await rows(res)).map((r) => r.customer)).toEqual(['Alice']);
