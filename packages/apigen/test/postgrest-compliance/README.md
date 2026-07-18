@@ -58,7 +58,8 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Response | error envelope `{code,details,hint,message}` + SQLSTATE→status | ✅ |
 | Writes | insert / update / delete, `Prefer: return=minimal\|representation` | ✅ |
 | Writes | `Prefer: return=headers-only` + PK-derived `Location` | ✅ |
-| Writes | upsert (`on_conflict`, `resolution=`), `PUT`, `columns=`, `missing=default` | 🚧 |
+| Writes | `POST` upsert (`on_conflict`, `resolution=merge`/`ignore`; 200-on-update / 201-on-insert) | ✅ |
+| Writes | `PUT`, `columns=`, `missing=default` | 🚧 |
 | Embedding | FK resource embedding `select=*,related(*)`, `!inner`, spread | 🚧 |
 | Functions | `POST /rpc/<name>` | ✅ |
 | Negotiation | CSV, `HEAD`, `OPTIONS`, `Accept-Profile`/`Content-Profile`, OpenAPI | 🚧 |

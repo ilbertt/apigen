@@ -342,6 +342,31 @@ export interface CompiledInsert {
   readonly rowCount: number;
 }
 
+/** Upsert conflict handling: `merge` → DO UPDATE (set non-key columns), `ignore` → DO NOTHING. */
+export interface ConflictTarget {
+  readonly columns: readonly string[];
+  readonly action: 'merge' | 'ignore';
+}
+
+function onConflictClause({
+  conflict,
+  insertColumns,
+}: {
+  conflict: ConflictTarget;
+  insertColumns: readonly string[];
+}): Sql {
+  const target = join({ values: conflict.columns.map(ident), separator: ', ' });
+  const keys = new Set(conflict.columns);
+  const updatable = insertColumns.filter((col) => !keys.has(col));
+  // DO UPDATE needs at least one assignment; with only key columns present there is
+  // nothing to merge, so it degrades to DO NOTHING (as PostgREST does).
+  if (conflict.action === 'ignore' || updatable.length === 0) {
+    return sql`on conflict (${target}) do nothing`;
+  }
+  const assignments = updatable.map((col) => sql`${ident(col)} = excluded.${ident(col)}`);
+  return sql`on conflict (${target}) do update set ${join({ values: assignments, separator: ', ' })}`;
+}
+
 export function compileInsert({
   relation,
   columns,
@@ -349,6 +374,7 @@ export function compileInsert({
   insertColumns,
   policy,
   returning,
+  conflict,
 }: {
   relation: string;
   columns: RelationColumns;
@@ -356,6 +382,7 @@ export function compileInsert({
   insertColumns: readonly string[];
   policy: Policy;
   returning: readonly SelectItem[];
+  conflict?: ConflictTarget;
 }): CompiledInsert {
   const colList = join({ values: insertColumns.map(ident), separator: ', ' });
   const valueRows = rows.map((row) => {
@@ -365,12 +392,25 @@ export function compileInsert({
     return sql`(${join({ values: cells, separator: ', ' })})`;
   });
   const values = join({ values: valueRows, separator: ', ' });
+  const proj = projection({ items: returning, columns });
   // WITH CHECK is applied as a WHERE over the VALUES rows, so the policy can only
   // reference columns present in the request body — a column filled by a DB
   // default is not visible to the predicate here (PLAN's insert shape). Rows that
   // fail the predicate are filtered out; the caller rejects the batch on a count
   // mismatch.
-  const stmt = sql`with _apigen_ins as (insert into ${ident(relation)} (${colList}) select ${colList} from (values ${values}) as v (${colList}) where (${policy.fragment}) returning ${projection({ items: returning, columns })}) select coalesce(json_agg(_apigen_ins), '[]')::text as body, count(*)::int as page from _apigen_ins`;
+  const head = sql`insert into ${ident(relation)} (${colList}) select ${colList} from (values ${values}) as v (${colList}) where (${policy.fragment})`;
+  if (conflict === undefined) {
+    const stmt = sql`with _apigen_ins as (${head} returning ${proj}) select coalesce(json_agg(_apigen_ins), '[]')::text as body, count(*)::int as page, 0 as updated from _apigen_ins`;
+    return { query: toQuery(stmt), rowCount: rows.length };
+  }
+  // Upsert: PostgREST answers 200 when a conflict UPDATED an existing row, 201 when it
+  // INSERTED. `xmax <> 0` distinguishes the two per row; the sentinel is kept out of the
+  // body via a re-select over the output columns (like update's ctid handling).
+  const outputCols = join({
+    values: returning.map((item) => ident(item.alias ?? item.column)),
+    separator: ', ',
+  });
+  const stmt = sql`with _apigen_ins as (${head} ${onConflictClause({ conflict, insertColumns })} returning (xmax::text::int8 <> 0) as _apigen_updated, ${proj}) select coalesce((select json_agg(_apigen_rows) from (select ${outputCols} from _apigen_ins) _apigen_rows), '[]')::text as body, (select count(*)::int from _apigen_ins) as page, coalesce((select bool_or(_apigen_updated)::int from _apigen_ins), 0) as updated`;
   return { query: toQuery(stmt), rowCount: rows.length };
 }
 

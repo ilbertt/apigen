@@ -1,5 +1,6 @@
 import { type Authorization, authorize } from './authorize.js';
 import {
+  type ConflictTarget,
   compileDelete,
   compileFunction,
   compileInsert,
@@ -52,11 +53,14 @@ interface Rendered {
   total?: number;
   /** JSON text array of updated-row ctids (update only); parsed for WITH CHECK re-verification. */
   ctids?: string;
+  /** Upsert only: 1 if a conflict UPDATED an existing row (→ 200), 0 if it INSERTED (→ 201). */
+  updated?: number;
 }
 
 interface Preferences {
   return: 'minimal' | 'representation' | 'headers-only';
   count: boolean;
+  resolution?: 'merge-duplicates' | 'ignore-duplicates';
 }
 
 function badRequest(message: string): never {
@@ -73,9 +77,23 @@ function preferredReturn(prefer: string): Preferences['return'] {
   return 'minimal';
 }
 
+function preferredResolution(prefer: string): Preferences['resolution'] {
+  if (prefer.includes('resolution=merge-duplicates')) {
+    return 'merge-duplicates';
+  }
+  if (prefer.includes('resolution=ignore-duplicates')) {
+    return 'ignore-duplicates';
+  }
+  return undefined;
+}
+
 function parsePreferences(req: Request): Preferences {
   const prefer = req.headers.get('prefer') ?? '';
-  return { return: preferredReturn(prefer), count: prefer.includes('count=exact') };
+  return {
+    return: preferredReturn(prefer),
+    count: prefer.includes('count=exact'),
+    resolution: preferredResolution(prefer),
+  };
 }
 
 function wantsSingular(req: Request): boolean {
@@ -376,6 +394,18 @@ function locationFor({
   return `/${relation}?${query}`;
 }
 
+/** PostgREST echoes the honored non-default preferences, e.g. `resolution=…, return=…`. */
+function preferenceApplied(prefs: Preferences): string | undefined {
+  const applied: string[] = [];
+  if (prefs.resolution !== undefined) {
+    applied.push(`resolution=${prefs.resolution}`);
+  }
+  if (prefs.return === 'representation' || prefs.return === 'headers-only') {
+    applied.push(`return=${prefs.return}`);
+  }
+  return applied.length > 0 ? applied.join(', ') : undefined;
+}
+
 function writeResponse({
   prefs,
   result,
@@ -394,18 +424,19 @@ function writeResponse({
   const headers: Record<string, string> = {
     'content-range': contentRange({ numerator, total: null }),
   };
-  if (prefs.return === 'representation') {
-    headers['preference-applied'] = 'return=representation';
-    return buildResponse({ status: representationStatus, body: result.body, headers });
+  const applied = preferenceApplied(prefs);
+  if (applied !== undefined) {
+    headers['preference-applied'] = applied;
   }
-  if (prefs.return === 'headers-only') {
-    headers['preference-applied'] = 'return=headers-only';
-    if (location !== undefined) {
-      headers.location = location;
-    }
-    return buildResponse({ status: minimalStatus, body: null, headers });
+  if (location !== undefined) {
+    headers.location = location;
   }
-  return buildResponse({ status: minimalStatus, body: null, headers });
+  const representation = prefs.return === 'representation';
+  return buildResponse({
+    status: representation ? representationStatus : minimalStatus,
+    body: representation ? result.body : null,
+    headers,
+  });
 }
 
 async function handleInsert({
@@ -452,6 +483,16 @@ async function handleInsert({
     ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
   }
 
+  // An upsert (Prefer: resolution=…) targets on_conflict columns, or the PK by default.
+  const conflictColumns = parsed.onConflict ?? pk;
+  const conflict: ConflictTarget | undefined =
+    prefs.resolution !== undefined && conflictColumns.length > 0
+      ? {
+          columns: conflictColumns,
+          action: prefs.resolution === 'merge-duplicates' ? 'merge' : 'ignore',
+        }
+      : undefined;
+
   const { query, rowCount } = compileInsert({
     relation,
     columns,
@@ -459,10 +500,13 @@ async function handleInsert({
     insertColumns,
     policy: auth.policy,
     returning,
+    conflict,
   });
   const result = await adapter.transaction(async (tx) => {
     const rendered = (await tx.execute(query))[0] as Rendered;
-    if (rendered.page !== rowCount) {
+    // ignore-duplicates legitimately drops conflicting rows, so a short count isn't a
+    // policy violation; every other write must return every requested row.
+    if (conflict?.action !== 'ignore' && rendered.page !== rowCount) {
       throw new ApiError({
         status: HttpStatus.Forbidden,
         message: `Insert into "${relation}" violates the WITH CHECK policy`,
@@ -473,13 +517,15 @@ async function handleInsert({
   const inserted = wantLocation ? (JSON.parse(result.body) as Row[])[0] : undefined;
   const location =
     inserted === undefined ? undefined : locationFor({ relation, pk, row: inserted });
-  // POST is 201 whether or not the body is returned; PostgREST reports no row range.
+  // POST is 201, except an upsert that UPDATED an existing row answers 200 (PostgREST's
+  // rule). PostgREST reports no row range for a write.
+  const status = result.updated === 1 ? HttpStatus.Ok : HttpStatus.Created;
   return writeResponse({
     prefs,
     result,
     numerator: '*',
-    representationStatus: HttpStatus.Created,
-    minimalStatus: HttpStatus.Created,
+    representationStatus: status,
+    minimalStatus: status,
     location,
   });
 }
