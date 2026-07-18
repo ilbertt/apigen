@@ -124,7 +124,16 @@ function jsonPathExpr({ base, path }: { base: Sql; path: readonly JsonPathStep[]
   return expr;
 }
 
-function projectItem({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
+/** The output key of a select item: alias, else the JSON path's last key or the aggregate, else the column. */
+export function outputName(item: SelectItem): string {
+  if (item.aggregate !== undefined) {
+    return item.alias ?? item.aggregate;
+  }
+  return item.alias ?? item.path?.at(-1)?.key ?? item.column;
+}
+
+/** The value expression of a select item (aggregate call / JSON path / cast), unlabeled. */
+function itemValue({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
   if (item.aggregate !== undefined) {
     // count() aggregates over `*`; every other aggregate (and col.count()) over a column.
     let inner: Sql;
@@ -135,21 +144,32 @@ function projectItem({ item, columns }: { item: SelectItem; columns: RelationCol
       inner = ident(item.column);
     }
     const call = sql`${raw(item.aggregate)}(${inner})`;
-    const expr = item.cast === undefined ? call : sql`${call}${castSuffix(item.cast)}`;
-    return sql`${expr} as ${ident(item.alias ?? item.aggregate)}`;
+    return item.cast === undefined ? call : sql`${call}${castSuffix(item.cast)}`;
   }
   pgTypeOf({ columns, col: item.column }); // presence check against the catalog
   const base = ident(item.column);
-  // A plain column projects bare so json_agg labels it by its own name (byte-identical
-  // to before). An alias, cast, or JSON path needs an explicit label for the JSON key.
-  if (item.alias === undefined && item.cast === undefined && item.path === undefined) {
-    return base;
-  }
   const walked = item.path === undefined ? base : sql`(${jsonPathExpr({ base, path: item.path })})`;
-  const expr = item.cast === undefined ? walked : sql`${walked}${castSuffix(item.cast)}`;
-  // PostgREST names a JSON-path column after its last key unless explicitly aliased.
-  const label = item.alias ?? item.path?.at(-1)?.key ?? item.column;
-  return sql`${expr} as ${ident(label)}`;
+  return item.cast === undefined ? walked : sql`${walked}${castSuffix(item.cast)}`;
+}
+
+function projectItem({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
+  // A plain column projects bare so json_agg labels it by its own name (byte-identical
+  // to before). An alias, cast, JSON path, or aggregate needs an explicit label.
+  const plain =
+    item.aggregate === undefined &&
+    item.alias === undefined &&
+    item.cast === undefined &&
+    item.path === undefined;
+  if (plain) {
+    pgTypeOf({ columns, col: item.column });
+    return ident(item.column);
+  }
+  return sql`${itemValue({ item, columns })} as ${ident(outputName(item))}`;
+}
+
+/** Like projectItem but casts the value to text — CSV builds its cells from these. */
+function projectText({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
+  return sql`${itemValue({ item, columns })}::text as ${ident(outputName(item))}`;
 }
 
 function projection({
@@ -378,6 +398,7 @@ export function compileSelect({
   allowedColumns,
   count = false,
   embeds = [],
+  csv = false,
 }: {
   relation: string;
   columns: RelationColumns;
@@ -386,10 +407,14 @@ export function compileSelect({
   allowedColumns: readonly string[];
   count?: boolean;
   embeds?: readonly EmbedPlan[];
+  csv?: boolean;
 }): Query {
   const items = parsed.select ?? toItems(allowedColumns);
-  const colFrags = items.map((item) => projectItem({ item, columns }));
-  const embedFrags = embeds.map((embed) => embedFragment({ embed, base: relation }));
+  // CSV builds its cells from text-cast values and does not embed.
+  const colFrags = items.map((item) =>
+    csv ? projectText({ item, columns }) : projectItem({ item, columns }),
+  );
+  const embedFrags = csv ? [] : embeds.map((embed) => embedFragment({ embed, base: relation }));
   const projFrags = [...colFrags, ...embedFrags];
   if (projFrags.length === 0) {
     internal('Relation has no visible columns to project');

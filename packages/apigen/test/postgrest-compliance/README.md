@@ -67,4 +67,5 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Embedding | spread `...table`, nested embeds (depth > 1) | 🚧 |
 | Functions | `POST /rpc/<name>` | ✅ |
 | Negotiation | `HEAD` (GET headers, no body) + `OPTIONS` (`Allow`) | ✅ |
-| Negotiation | CSV, `Accept-Profile`/`Content-Profile`, OpenAPI | 🚧 |
+| Negotiation | CSV output (`Accept: text/csv`) | ✅ |
+| Negotiation | CSV input, `Accept-Profile`/`Content-Profile`, OpenAPI | 🚧 |

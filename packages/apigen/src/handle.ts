@@ -7,6 +7,7 @@ import {
   compileSelect,
   compileUpdate,
   type EmbedPlan,
+  outputName,
 } from './compile.js';
 import {
   type Adapter,
@@ -113,6 +114,30 @@ function parsePreferences(req: Request): Preferences {
 
 function wantsSingular(req: Request): boolean {
   return (req.headers.get('accept') ?? '').includes(SINGULAR_MEDIA);
+}
+
+function wantsCsv(req: Request): boolean {
+  return (req.headers.get('accept') ?? '').includes('text/csv');
+}
+
+/** A field needs quoting when it holds a comma, quote, or newline; internal quotes double. */
+const CSV_QUOTE_RE = /[",\n\r]/;
+
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const text = String(value);
+  return CSV_QUOTE_RE.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+/** Serialize the text-valued rows to RFC-4180 CSV (header + rows, no trailing newline). */
+function toCsv({ header, rows }: { header: readonly string[]; rows: readonly Row[] }): string {
+  const lines = [header.map(csvCell).join(',')];
+  for (const row of rows) {
+    lines.push(header.map((name) => csvCell(row[name])).join(','));
+  }
+  return lines.join('\n');
 }
 
 const RANGE_RE = /^(\d+)-(\d*)$/;
@@ -460,6 +485,7 @@ async function handleSelect({
       ? { ...parsed, offset: range.offset, limit: range.limit }
       : parsed;
 
+  const csv = wantsCsv(req);
   const query = compileSelect({
     relation,
     columns,
@@ -468,6 +494,7 @@ async function handleSelect({
     allowedColumns: auth.allowedColumns,
     count: prefs.count,
     embeds,
+    csv,
   });
   const result = await runOne({ adapter, query });
   const offset = paged.offset ?? 0;
@@ -475,6 +502,22 @@ async function handleSelect({
   const headers: Record<string, string> = {};
   if (prefs.count) {
     headers['preference-applied'] = 'count=exact';
+  }
+  const partial = total !== null && offset + result.page < total;
+
+  if (csv) {
+    headers['content-range'] = contentRange({
+      numerator: rowRange({ offset, page: result.page }),
+      total,
+    });
+    headers['content-type'] = 'text/csv; charset=utf-8';
+    const items = parsed.select ?? auth.allowedColumns.map((column) => ({ column }));
+    const body = toCsv({ header: items.map(outputName), rows: JSON.parse(result.body) as Row[] });
+    return buildResponse({
+      status: partial ? HttpStatus.PartialContent : HttpStatus.Ok,
+      body,
+      headers,
+    });
   }
 
   if (singular) {
@@ -496,7 +539,6 @@ async function handleSelect({
     numerator: rowRange({ offset, page: result.page }),
     total,
   });
-  const partial = total !== null && offset + result.page < total;
   return buildResponse({
     status: partial ? HttpStatus.PartialContent : HttpStatus.Ok,
     body: result.body,
