@@ -18,8 +18,27 @@ function expectBadRequest(run: () => unknown): void {
   expect((caught as ApiError).status).toBe(HttpStatus.BadRequest);
 }
 
-test('select: comma-separated columns become a column list', () => {
-  expect(parseRequest(urlFor('select=customer,amount')).select).toEqual(['customer', 'amount']);
+test('select: comma-separated columns become plain select items', () => {
+  expect(parseRequest(urlFor('select=customer,amount')).select).toEqual([
+    { column: 'customer' },
+    { column: 'amount' },
+  ]);
+});
+
+test('select: renaming (alias:col), casting (col::type), and both', () => {
+  expect(parseRequest(urlFor('select=who:customer')).select).toEqual([
+    { column: 'customer', alias: 'who' },
+  ]);
+  expect(parseRequest(urlFor('select=amount::text')).select).toEqual([
+    { column: 'amount', cast: 'text' },
+  ]);
+  expect(parseRequest(urlFor('select=total:amount::text')).select).toEqual([
+    { column: 'amount', alias: 'total', cast: 'text' },
+  ]);
+});
+
+test('select: an unsafe cast type is a 400', () => {
+  expectBadRequest(() => parseRequest(urlFor('select=amount::text)')));
 });
 
 test('select: "*" and an absent select both mean "all columns" (undefined)', () => {

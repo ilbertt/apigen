@@ -181,6 +181,25 @@ test('filters: logical or/and/not.and compose with the policy', async () => {
   expect(await customers('/orders?not.and=(status.eq.paid,paid.is.true)')).toEqual(['Bob']);
 });
 
+test('select: rename (alias:col) and cast (col::type) reshape the projection', async () => {
+  const res = await get('/orders?select=who:customer,amount::text&order=customer.asc', ORG1);
+  expect(await rows(res)).toEqual([
+    { who: 'Alice', amount: '100.00' },
+    { who: 'Bob', amount: '50.50' },
+  ]);
+});
+
+test('select: a PATCH representation honors rename/cast in RETURNING', async () => {
+  const res = await send({
+    method: 'PATCH',
+    path: '/orders?customer=eq.Alice&select=who:customer,amount::text',
+    org: ORG1,
+    body: { status: 'shipped' },
+    prefer: REPRESENTATION,
+  });
+  expect(await rows(res)).toEqual([{ who: 'Alice', amount: '100.00' }]);
+});
+
 test('order / limit / offset', async () => {
   const res = await get('/orders?order=amount.desc&limit=1', ORG1);
   expect((await rows(res)).map((r) => r.customer)).toEqual(['Alice']);

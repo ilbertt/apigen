@@ -267,7 +267,7 @@ async function handleSelect({
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'select', module, columns });
   const referenced = [
-    ...(parsed.select ?? []),
+    ...(parsed.select?.map((item) => item.column) ?? []),
     ...filterColumns(parsed.filters),
     ...parsed.order.map((o) => o.column),
   ];
@@ -369,8 +369,8 @@ async function handleInsert({
   }
   ensureAllowed({ cols: insertColumns, auth, relation });
   const prefs = parsePreferences(req);
-  const returning = parsed.select ?? auth.allowedColumns;
-  ensureAllowed({ cols: returning, auth, relation });
+  const returning = parsed.select ?? auth.allowedColumns.map((column) => ({ column }));
+  ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
 
   const { query, rowCount } = compileInsert({
     relation,
@@ -429,8 +429,8 @@ async function handleUpdate({
   ensureAllowed({ cols: setColumns, auth, relation });
   ensureCatalog({ cols: filterColumns(parsed.filters), columns, relation });
   const prefs = parsePreferences(req);
-  const returning = parsed.select ?? auth.allowedColumns;
-  ensureAllowed({ cols: returning, auth, relation });
+  const returning = parsed.select ?? auth.allowedColumns.map((column) => ({ column }));
+  ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
 
   const plan = compileUpdate({
     relation,
@@ -483,8 +483,8 @@ async function handleDelete({
   const auth = await authorize({ req, op: 'delete', module, columns });
   ensureCatalog({ cols: filterColumns(parsed.filters), columns, relation });
   const prefs = parsePreferences(req);
-  const returning = parsed.select ?? auth.allowedColumns;
-  ensureAllowed({ cols: returning, auth, relation });
+  const returning = parsed.select ?? auth.allowedColumns.map((column) => ({ column }));
+  ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
 
   const query = compileDelete({
     relation,
