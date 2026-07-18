@@ -20,7 +20,8 @@ create table orders (
   note text, -- nullable on purpose: exercises NULL semantics (is/isdistinct/negation)
   description text not null default '', -- prose for full-text search (fts/plfts/phfts/wfts)
   tags text[] not null default '{}', -- array for containment/overlap (cs/cd/ov)
-  span int4range -- range for range operators (cs/cd/ov/sl/sr/nxr/nxl/adj)
+  span int4range, -- range for range operators (cs/cd/ov/sl/sr/nxr/nxl/adj)
+  meta jsonb -- JSON for path selection (meta->>key / meta->key)
 );
 
 create table order_items (

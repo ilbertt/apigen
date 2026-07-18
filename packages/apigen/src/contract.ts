@@ -123,14 +123,22 @@ export interface OrderTerm {
   readonly nullsFirst?: boolean;
 }
 
+/** One step of a JSON path: `->` yields json, `->>` yields text; `key` is an object key or array index. */
+export interface JsonPathStep {
+  readonly arrow: '->' | '->>';
+  readonly key: string;
+}
+
 /**
- * A projected column: the source `column`, optionally renamed (`alias:col`) and/or cast
- * (`col::type`). A plain column has neither.
+ * A projected column: the source `column`, an optional JSON `path` into it
+ * (`col->a->>b`), optionally renamed (`alias:col`) and/or cast (`col::type`). A plain
+ * column has none of these.
  */
 export interface SelectItem {
   readonly column: string;
   readonly alias?: string;
   readonly cast?: string;
+  readonly path?: readonly JsonPathStep[];
 }
 
 /** PostgREST URL query parsed into structured form (parser → compiler contract). */
