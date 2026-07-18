@@ -1,4 +1,4 @@
-name: checks
+name: tests
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  types:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -15,24 +15,13 @@ jobs:
 
       - uses: ./.github/actions/prepare
 
-      - name: Check Types
-        run: bun check:types
+      - name: Run all tests
+        run: bun run test
 
-  codestyle:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - uses: ./.github/actions/prepare
-
-      - name: Check JS Codestyle
-        run: bun check:codestyle
-
-  checks-passed:
+  tests-passed:
     if: always()
-    name: checks:required
-    needs: [types, codestyle]
+    name: tests:required
+    needs: [tests]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed

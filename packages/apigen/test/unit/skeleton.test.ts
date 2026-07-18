@@ -1,8 +1,8 @@
 /** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { Apigen, relation } from '../src/index.js';
-import { createFixtureDb, FIXTURE_CATALOG, type TestDb } from './helpers/db.js';
+import { Apigen, relation } from '../../src/index.js';
+import { createFixtureDb, FIXTURE_CATALOG, type TestDb } from '../helpers/db.js';
 
 let db: TestDb;
 let app: Apigen;
@@ -22,7 +22,7 @@ afterAll(async () => {
 test('GET /orders returns every row as JSON', async () => {
   const res = await app.handle(new Request('http://localhost/orders'));
   expect(res.status).toBe(200);
-  expect(res.headers.get('content-type')).toBe('application/json');
+  expect(res.headers.get('content-type')).toBe('application/json; charset=utf-8');
 
   const body = (await res.json()) as Record<string, unknown>[];
   expect(body).toHaveLength(3);
@@ -31,13 +31,13 @@ test('GET /orders returns every row as JSON', async () => {
   expect(alice).toMatchObject({
     org_id: '11111111-1111-1111-1111-111111111111',
     customer: 'Alice',
-    amount: '100.00',
+    amount: 100,
     status: 'paid',
     paid: true,
   });
-  // int8 / numeric surfaced as strings
-  expect(typeof alice?.id).toBe('string');
-  expect(typeof alice?.amount).toBe('string');
+  // int8 / numeric render as JSON numbers (Postgres-rendered JSON), like PostgREST
+  expect(typeof alice?.id).toBe('number');
+  expect(typeof alice?.amount).toBe('number');
 });
 
 test('an unmounted op is denied', async () => {

@@ -10,6 +10,9 @@
     },
     "test": {
       "dependsOn": ["^test"]
+    },
+    "test:postgrest-compliance": {
+      "dependsOn": ["^test:postgrest-compliance"]
     }
   }
 }

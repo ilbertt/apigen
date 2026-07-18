@@ -146,9 +146,24 @@ export const products = relation('products').select({
 `select`, the filters `eq neq gt gte lt lte in is like ilike`, `order`
 (`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast
 to the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a
-400 and never reaches the database. `int8` and `numeric` come back as strings.
+400 and never reaches the database.
 
 Method → operation: `GET` select, `POST` insert, `PATCH` update, `DELETE` delete.
+
+## Responses
+
+Responses match PostgREST byte-for-byte over the supported surface — the JSON is
+rendered by Postgres itself, so `numeric` keeps its scale, `int8` comes back as a
+number, and `timestamptz` as ISO-8601.
+
+- **Reads** return a JSON array plus a `Content-Range` header (`0-9/*`). `Prefer:
+  count=exact` fills in the total (`0-9/42`) and answers `206` when the page is partial.
+- **Writes** default to `Prefer: return=minimal`: `POST` → `201` empty, `PATCH`/`DELETE`
+  → `204` empty. Send `Prefer: return=representation` to get the affected rows back.
+- **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
+  `406` (`PGRST116`) when the result isn't exactly one row.
+- **Errors** use PostgREST's envelope, `{ code, details, hint, message }`, passing the
+  Postgres `SQLSTATE` through on database errors.
 
 ## Functions
 
@@ -215,8 +230,11 @@ bunx apigen gen --help
 
 ## Not included (yet)
 
-Embeds, OpenAPI generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1
-dialects are out of scope for now.
+Logical operators (`or`/`and`/`not`), full-text search, CSV and other content types,
+embeds, OpenAPI generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1
+dialects are out of scope for now. apigen also enforces `allowedColumns` up front (a
+`403`) instead of deferring to Postgres, so an unknown or forbidden column is rejected
+before the query runs.
 
 ## License
 

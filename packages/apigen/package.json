@@ -22,7 +22,8 @@
     "build:lib": "bun run --bun tsc -p tsconfig.build.json",
     "codegen": "parsh-codegen generate --commands src/codegen/cli/commands --out src/codegen/cli/command-tree.gen.ts --eager",
     "check:types": "bun run --bun tsc",
-    "test": "bun test"
+    "test": "bun test test/unit",
+    "test:postgrest-compliance": "bun test test/postgrest-compliance"
   },
   "dependencies": {},
   "peerDependencies": {

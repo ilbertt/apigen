@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { createAdapter, createPostgresAdapter } from '../src/adapters/index.js';
-import type { Adapter } from '../src/contract.js';
-import { createFixtureDb, type TestDb } from './helpers/db.js';
+import { createAdapter, createPostgresAdapter } from '../../src/adapters/index.js';
+import type { Adapter } from '../../src/contract.js';
+import { createFixtureDb, type TestDb } from '../helpers/db.js';
 
 const COMMITTED_ORG_ID = '44444444-4444-4444-4444-444444444444';
 const ROLLBACK_ORG_ID = '33333333-3333-3333-3333-333333333333';

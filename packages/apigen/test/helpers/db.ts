@@ -97,3 +97,13 @@ export async function createFixtureDb(): Promise<TestDb> {
   const seed = await Bun.file(join(FIXTURES_DIR, 'seed.sql')).text();
   return createTestDb({ migrations, seed });
 }
+
+/**
+ * Connect to an already-running Postgres by URL (the PostgREST compliance suite points
+ * this at the Docker container). Unlike {@link createTestDb} this opens no PGlite —
+ * the database lifecycle is owned by docker-compose.
+ */
+export function connectPostgres(url: string): { sql: Sql; end: () => Promise<void> } {
+  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  return { sql, end: () => sql.end({ timeout: 5 }) };
+}

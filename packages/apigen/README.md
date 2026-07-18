@@ -56,14 +56,3 @@ first so the bundle can't embed a stale tree.
 - **Relative imports with the `.ts` extension** (e.g. `import { sql } from './builder/index.ts'`)
   — the pinned TypeScript compiler requires the extension, and relative (not `#*`)
   specifiers are what emit cleanly into declarations.
-
-## Dev scripts
-
-- `bun run check:types` — `tsc` (no emit)
-- `bun run codegen` — regenerate the parsh command tree
-- `bun test` — full suite against pglite-socket + a postgres.js devDependency.
-  Fixtures (migrations + seed) live under `test/fixtures/`; the socket helper is
-  `test/helpers/db.ts`. The committed `test/__generated__/*.gen.ts` files
-  (`todos.gen.ts`, `functions.gen.ts`) are codegen fixtures kept in the tsconfig
-  include so `check:types` also typechecks emitted output; the codegen tests
-  regenerate them.

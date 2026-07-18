@@ -1,9 +1,10 @@
 /** biome-ignore-all lint/complexity/useMaxParams: apigen authorization fns are (req, { sql }) by design. */
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { HttpStatus } from '../src/http.js';
-import { Apigen, type Relation, relation } from '../src/index.js';
-import { createFixtureDb, FIXTURE_CATALOG, type Sql, type TestDb } from './helpers/db.js';
+import { HttpStatus } from '../../src/http.js';
+import { Apigen, type Relation, relation } from '../../src/index.js';
+import { createFixtureDb, FIXTURE_CATALOG, type Sql, type TestDb } from '../helpers/db.js';
+import { REPRESENTATION } from '../helpers/http.js';
 
 const ORG1 = '11111111-1111-1111-1111-111111111111';
 const ORG2 = '22222222-2222-2222-2222-222222222222';
@@ -83,17 +84,20 @@ function send({
   path,
   org,
   body,
+  prefer,
 }: {
   method: string;
   path: string;
   org?: string;
   body?: unknown;
+  prefer?: string;
 }): Promise<Response> {
   return app.handle(
     new Request(`http://localhost${path}`, {
       method,
       headers: {
         ...(org ? { 'x-org-id': org } : {}),
+        ...(prefer ? { prefer } : {}),
         'content-type': 'application/json',
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -170,6 +174,7 @@ for (const table of TABLES) {
       method: 'POST',
       path: `/${table.name}`,
       org: ORG1,
+      prefer: REPRESENTATION,
       body: table.insertBody,
     });
     expect(res.status).toBe(HttpStatus.Created);
@@ -197,6 +202,7 @@ for (const table of TABLES) {
       method: 'PATCH',
       path: `/${table.name}?${table.rowFilter}`,
       org: ORG1,
+      prefer: REPRESENTATION,
       body: table.updatePatch,
     });
     expect(res.status).toBe(HttpStatus.Ok);
@@ -212,6 +218,7 @@ for (const table of TABLES) {
       method: 'DELETE',
       path: `/${table.name}?${table.rowFilter}`,
       org: ORG1,
+      prefer: REPRESENTATION,
     });
     expect(res.status).toBe(HttpStatus.Ok);
     expect(await rows(res)).toHaveLength(1);

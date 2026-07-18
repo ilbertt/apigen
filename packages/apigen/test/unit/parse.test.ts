@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import type { Filter, OrderTerm } from '../src/contract.js';
-import { ApiError, HttpStatus } from '../src/http.js';
-import { parseRequest } from '../src/parse.js';
+import type { Filter, OrderTerm } from '../../src/contract.js';
+import { ApiError, HttpStatus } from '../../src/http.js';
+import { parseRequest } from '../../src/parse.js';
 
 function urlFor(query: string): URL {
   return new URL(`http://localhost/orders?${query}`);
