@@ -29,11 +29,20 @@ import { filterColumns, parseRequest } from './parse.js';
 
 const METHOD_OP: Record<string, Op> = {
   GET: 'select',
+  HEAD: 'select', // same as GET, but the body is dropped before sending
   POST: 'insert',
   PUT: 'insert', // a single-row upsert keyed by the PK; dispatched to handlePut
   PATCH: 'update',
   DELETE: 'delete',
 };
+
+/** OPTIONS `Allow` order (PostgREST's): the methods each mounted op unlocks. */
+const OP_METHODS: readonly { op: Op; methods: readonly string[] }[] = [
+  { op: 'select', methods: ['GET', 'HEAD'] },
+  { op: 'insert', methods: ['POST', 'PUT'] },
+  { op: 'update', methods: ['PATCH'] },
+  { op: 'delete', methods: ['DELETE'] },
+];
 
 /** Functions are called under this path prefix: `POST /rpc/<name>`. */
 const RPC_PREFIX = 'rpc';
@@ -888,6 +897,36 @@ function errorResponse(err: unknown): Response {
   });
 }
 
+/** `OPTIONS`: 200 with an `Allow` header listing the methods the relation's mounts permit. */
+function handleOptions({
+  url,
+  modules,
+}: {
+  url: URL;
+  modules: ReadonlyMap<string, RelationModule>;
+}): Response {
+  const relation = relationNameFromUrl(url);
+  const module = modules.get(relation);
+  if (module === undefined) {
+    throw new ApiError({
+      status: HttpStatus.NotFound,
+      code: 'PGRST205',
+      message: `Relation "${relation}" is not exposed`,
+    });
+  }
+  const methods = ['OPTIONS'];
+  for (const { op, methods: unlocked } of OP_METHODS) {
+    if (module.handlers[op] !== undefined) {
+      methods.push(...unlocked);
+    }
+  }
+  return buildResponse({
+    status: HttpStatus.Ok,
+    body: null,
+    headers: { allow: methods.join(',') },
+  });
+}
+
 export async function handleRequest({
   req,
   catalog,
@@ -921,6 +960,10 @@ export async function handleRequest({
         functionCatalog,
         adapter,
       });
+    }
+
+    if (req.method === 'OPTIONS') {
+      return handleOptions({ url, modules });
     }
 
     const op = METHOD_OP[req.method];
@@ -979,10 +1022,14 @@ export async function handleRequest({
         });
     }
 
-    if (config?.afterExecute) {
-      return await config.afterExecute({ req, op, relation, response });
+    const finished = config?.afterExecute
+      ? await config.afterExecute({ req, op, relation, response })
+      : response;
+    // HEAD runs the same query as GET for its headers, but sends no body.
+    if (req.method === 'HEAD') {
+      return new Response(null, { status: finished.status, headers: finished.headers });
     }
-    return response;
+    return finished;
   } catch (err) {
     return errorResponse(err);
   }

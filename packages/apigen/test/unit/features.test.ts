@@ -244,6 +244,28 @@ test('an unparseable Range header is a 400', async () => {
   expect(res.status).toBe(400);
 });
 
+test('HEAD mirrors GET headers with no body; OPTIONS lists the mounted methods', async () => {
+  const head = await app.handle(
+    new Request('http://localhost/orders?order=id', {
+      method: 'HEAD',
+      headers: { 'x-org-id': ORG1 },
+    }),
+  );
+  expect(head.status).toBe(200);
+  expect(head.headers.get('content-range')).toBe('0-1/*');
+  expect(await head.text()).toBe('');
+
+  const options = await app.handle(new Request('http://localhost/orders', { method: 'OPTIONS' }));
+  expect(options.status).toBe(200);
+  expect(options.headers.get('allow')).toBe('OPTIONS,GET,HEAD,POST,PUT,PATCH,DELETE');
+
+  // order_items mounts only select → only the read methods are allowed.
+  const items = await app.handle(
+    new Request('http://localhost/order_items', { method: 'OPTIONS' }),
+  );
+  expect(items.headers.get('allow')).toBe('OPTIONS,GET,HEAD');
+});
+
 test('?select projects only requested columns', async () => {
   const res = await get('/orders?select=customer,amount', ORG1);
   const [row] = await rows(res);

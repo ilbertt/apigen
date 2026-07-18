@@ -7,7 +7,7 @@
  */
 export interface DiffCase {
   readonly name: string;
-  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  readonly method: 'GET' | 'HEAD' | 'OPTIONS' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly path: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: unknown;
@@ -184,6 +184,16 @@ export const CASES: DiffCase[] = [
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },
   { name: 'limit + offset', method: 'GET', path: '/orders?order=id&limit=2&offset=1' },
   { name: 'empty result', method: 'GET', path: '/orders?customer=eq.Nobody' },
+
+  // content negotiation: HEAD mirrors GET headers with no body; OPTIONS lists Allow
+  { name: 'head', method: 'HEAD', path: '/orders?order=id' },
+  {
+    name: 'head count exact',
+    method: 'HEAD',
+    path: '/orders?order=id',
+    headers: { prefer: 'count=exact' },
+  },
+  { name: 'options', method: 'OPTIONS', path: '/orders' },
 
   // Range header pagination (an alternative to limit/offset)
   {
