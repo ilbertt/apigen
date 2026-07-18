@@ -20,7 +20,7 @@ services:
     volumes:
       # Applied once, alphabetically, on first init: schema, then roles/grants.
       # Row data is (re)seeded deterministically by the test itself, not here.
-      - ../fixtures/migrations.sql:/docker-entrypoint-initdb.d/01-migrations.sql:ro
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./roles.sql:/docker-entrypoint-initdb.d/02-roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

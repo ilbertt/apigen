@@ -18,8 +18,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { introspect } from '../../src/codegen/introspect.js';
+import type { Catalog } from '../../src/contract.js';
 import { Apigen, relation } from '../../src/index.js';
-import { connectPostgres, FIXTURE_CATALOG, type Sql } from '../helpers/db.js';
+import { connectPostgres, type Sql } from '../helpers/db.js';
 import { CASES, type DiffCase } from './cases.js';
 
 // Ports are fixed by docker-compose.yml, which this suite brings up. Use 127.0.0.1
@@ -55,9 +57,24 @@ let app: Apigen;
 /** seed.sql: pinned created_at + restarted identity → a fully deterministic reset. */
 let seedSql: string;
 
-function buildApp(db: Sql): Apigen {
+/**
+ * Build the catalog apigen runs against by introspecting the live container with
+ * apigen's own {@link introspect} — the same code path the CLI uses. Dogfoods
+ * introspection and removes any hand-written catalog that could drift as the schema
+ * grows to cover more PostgREST features.
+ */
+async function introspectCatalog(db: Sql): Promise<Catalog> {
+  const introspection = await introspect((text) => db.unsafe(text));
+  const catalog: Catalog = {};
+  for (const [name, columns] of Object.entries(introspection)) {
+    catalog[name] = Object.fromEntries(columns.map((c) => [c.name, c.pgType]));
+  }
+  return catalog;
+}
+
+function buildApp({ db, catalog }: { db: Sql; catalog: Catalog }): Apigen {
   const mount = (name: string) => relation(name).select({}).insert({}).update({}).delete({});
-  return new Apigen({ db, catalog: FIXTURE_CATALOG })
+  return new Apigen({ db, catalog })
     .use(mount('orders'))
     .use(mount('order_items'))
     .use(mount('orgs'));
@@ -125,7 +142,7 @@ describe('PostgREST compliance', () => {
     const conn = connectPostgres(APIGEN_PG_URL);
     sql = conn.sql;
     endDb = conn.end;
-    app = buildApp(sql);
+    app = buildApp({ db: sql, catalog: await introspectCatalog(sql) });
     await waitForPostgrest();
   }, STACK_UP_TIMEOUT_MS);
 
