@@ -84,7 +84,23 @@ export interface Filter {
   readonly negated?: boolean;
   /** Full-text-search language config from `op(config)`, e.g. `fts(english)`. */
   readonly config?: string;
+  /** `op(any)`/`op(all)` quantifier — the operator is applied against `values` as an array. */
+  readonly quantifier?: 'any' | 'all';
 }
+
+/** Operators that accept an `op(any)`/`op(all)` quantifier over a `{…}` value list. */
+export const QUANTIFIABLE_OPS = [
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'ilike',
+  'match',
+  'imatch',
+] as const;
 
 export interface OrderTerm {
   readonly column: string;

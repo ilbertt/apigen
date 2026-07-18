@@ -43,7 +43,7 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Horizontal filter | `not.` negation, `match` `imatch`, `isdistinct` | ✅ |
 | Horizontal filter | full-text `fts` `plfts` `phfts` `wfts` (with `(config)`) | ✅ |
 | Horizontal filter | array/range `cs` `cd` `ov` `sl` `sr` `nxr` `nxl` `adj` | ✅ |
-| Horizontal filter | `any`/`all` quantifiers | 🚧 |
+| Horizontal filter | `any`/`all` quantifiers | ✅ |
 | Horizontal filter | logical `or` `and` `not` (nested) | 🚧 |
 | Vertical filter | column projection (`select=a,b`) | ✅ |
 | Vertical filter | renaming `alias:col`, casting `col::type`, JSON paths `col->>k` | 🚧 |

@@ -106,6 +106,32 @@ const FILTER_CASES: readonly { readonly query: string; readonly expected: Filter
     query: 'tags=not.cs.{vip}',
     expected: { column: 'tags', op: 'cs', value: '{vip}', negated: true },
   },
+  // any/all quantifiers: the `{…}` operands parse into `values`, like/ilike still `*`→`%`.
+  {
+    query: 'id=eq(any).{1,2}',
+    expected: { column: 'id', op: 'eq', value: '{1,2}', values: ['1', '2'], quantifier: 'any' },
+  },
+  {
+    query: 'customer=like(all).{A*,*e}',
+    expected: {
+      column: 'customer',
+      op: 'like',
+      value: '{A*,*e}',
+      values: ['A%', '%e'],
+      quantifier: 'all',
+    },
+  },
+  {
+    query: 'id=not.eq(any).{1}',
+    expected: {
+      column: 'id',
+      op: 'eq',
+      value: '{1}',
+      values: ['1'],
+      quantifier: 'any',
+      negated: true,
+    },
+  },
 ];
 
 for (const { query, expected } of FILTER_CASES) {
@@ -175,6 +201,10 @@ test('an unknown filter operator is a 400', () => {
 
 test('a "(config)" on a non-full-text operator is a 400', () => {
   expectBadRequest(() => parseRequest(urlFor('amount=eq(english).1')));
+});
+
+test('an any/all quantifier on a non-quantifiable operator is a 400', () => {
+  expectBadRequest(() => parseRequest(urlFor('id=in(any).{1,2}')));
 });
 
 test('an empty "in" list is a 400', () => {
