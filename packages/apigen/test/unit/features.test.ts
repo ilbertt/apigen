@@ -215,6 +215,29 @@ test('writes: return=headers-only yields 201 + a PK-derived Location and no body
   expect(await res.text()).toBe('');
 });
 
+test('writes: missing=default fills absent columns with DEFAULT, still enforcing WITH CHECK', async () => {
+  // status is omitted from the body → DEFAULT 'pending'; org_id satisfies WITH CHECK.
+  const ok = await send({
+    method: 'POST',
+    path: '/orders?columns=org_id,customer,amount,status&select=customer,status',
+    org: ORG1,
+    body: { org_id: ORG1, customer: 'Zed', amount: 1 },
+    prefer: 'missing=default,return=representation',
+  });
+  expect(ok.status).toBe(201);
+  expect(await rows(ok)).toEqual([{ customer: 'Zed', status: 'pending' }]);
+
+  // missing=default inserts before verifying, so a row breaking WITH CHECK is still a 403.
+  const denied = await send({
+    method: 'POST',
+    path: '/orders?columns=org_id,customer,amount,status',
+    org: ORG1,
+    body: { org_id: ORG2, customer: 'Mallory', amount: 1 },
+    prefer: 'missing=default',
+  });
+  expect(denied.status).toBe(403);
+});
+
 test('order / limit / offset', async () => {
   const res = await get('/orders?order=amount.desc&limit=1', ORG1);
   expect((await rows(res)).map((r) => r.customer)).toEqual(['Alice']);

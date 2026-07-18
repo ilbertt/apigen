@@ -1,9 +1,9 @@
 /**
  * Request specs for PostgREST compliance. Each case is fired at both a real
  * PostgREST and at apigen in-process (see compliance.test.ts) and asserted to match
- * byte-for-byte. Every case is a behavior apigen guarantees to match; intentional
- * divergences (CSV, embeds, up-front allowedColumns) are out of scope — documented in
- * the README, not parked here as skipped tests.
+ * byte-for-byte. Every case is a behavior apigen guarantees to match; the few intentional
+ * divergences (OpenAPI generation, multi-schema Accept-Profile, up-front allowedColumns)
+ * are out of scope — documented in the README, not parked here as skipped tests.
  */
 export interface DiffCase {
   readonly name: string;
@@ -334,6 +334,18 @@ export const CASES: DiffCase[] = [
     headers: { prefer: 'return=headers-only' },
     body: { status: 'shipped' },
   },
+  // missing=default: a column in the insert set but absent from the row takes its DEFAULT
+  {
+    name: 'insert missing=default',
+    method: 'POST',
+    path: '/products?columns=sku,name,stock&select=sku,stock',
+    headers: {
+      'content-type': 'application/json',
+      prefer: 'missing=default,return=representation',
+    },
+    body: { sku: 'MD', name: 'Md' },
+  },
+
   // CSV insert: the header names the columns; unlisted columns take DB defaults
   {
     name: 'csv insert (representation)',

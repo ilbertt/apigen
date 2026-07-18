@@ -77,6 +77,7 @@ interface Preferences {
   return: 'minimal' | 'representation' | 'headers-only';
   count: boolean;
   resolution?: 'merge-duplicates' | 'ignore-duplicates';
+  missing?: 'default';
 }
 
 function badRequest(message: string): never {
@@ -109,6 +110,7 @@ function parsePreferences(req: Request): Preferences {
     return: preferredReturn(prefer),
     count: prefer.includes('count=exact'),
     resolution: preferredResolution(prefer),
+    missing: prefer.includes('missing=default') ? 'default' : undefined,
   };
 }
 
@@ -645,6 +647,9 @@ function preferenceApplied(prefs: Preferences): string | undefined {
   if (prefs.resolution !== undefined) {
     applied.push(`resolution=${prefs.resolution}`);
   }
+  if (prefs.missing !== undefined) {
+    applied.push(`missing=${prefs.missing}`);
+  }
   if (prefs.return === 'representation' || prefs.return === 'headers-only') {
     applied.push(`return=${prefs.return}`);
   }
@@ -747,7 +752,7 @@ async function handleInsert({
         }
       : undefined;
 
-  const { query, rowCount } = compileInsert({
+  const { query, rowCount, verify } = compileInsert({
     relation,
     columns,
     rows,
@@ -755,6 +760,7 @@ async function handleInsert({
     policy: auth.policy,
     returning,
     conflict,
+    missingDefault: prefs.missing === 'default',
   });
   const result = await adapter.transaction(async (tx) => {
     const rendered = (await tx.execute(query))[0] as Rendered;
@@ -765,6 +771,16 @@ async function handleInsert({
         status: HttpStatus.Forbidden,
         message: `Insert into "${relation}" violates the WITH CHECK policy`,
       });
+    }
+    // missing=default inserts before checking, so re-verify WITH CHECK on the new rows.
+    if (verify !== undefined) {
+      const ctids = rendered.ctids ? (JSON.parse(rendered.ctids) as string[]) : [];
+      if (ctids.length > 0 && (await tx.execute(verify(ctids))).length > 0) {
+        throw new ApiError({
+          status: HttpStatus.Forbidden,
+          message: `Insert into "${relation}" violates the WITH CHECK policy`,
+        });
+      }
     }
     return rendered;
   });
