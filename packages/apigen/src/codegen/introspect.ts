@@ -24,19 +24,22 @@ export type FunctionIntrospection = Record<string, IntrospectedFunction>;
 /** Runs a read-only SQL string and returns the result rows. Any pg source fits. */
 export type RunQuery = (sql: string) => Promise<unknown[]>;
 
-const COLUMNS_QUERY = `
+/** Quote a schema name as a SQL string literal (single quotes doubled). */
+const schemaLiteral = (schema: string): string => `'${schema.replaceAll("'", "''")}'`;
+
+const columnsQuery = (schema: string): string => `
   select table_name, column_name, udt_name, is_nullable
   from information_schema.columns
-  where table_schema = 'public'
+  where table_schema = ${schemaLiteral(schema)}
   order by table_name, ordinal_position
 `;
 
 /**
- * IN/INOUT arguments of every `public` function, one row per argument (a no-arg
+ * IN/INOUT arguments of every function in `schema`, one row per argument (a no-arg
  * function still yields one row, with a null argument, via the LEFT JOIN).
  * Overloads share `routine_name` but differ by `specific_name`; we keep the first.
  */
-const FUNCTIONS_QUERY = `
+const functionsQuery = (schema: string): string => `
   select
     r.routine_name as function_name,
     r.specific_name as specific_name,
@@ -46,21 +49,21 @@ const FUNCTIONS_QUERY = `
   left join information_schema.parameters p
     on p.specific_name = r.specific_name
     and p.parameter_mode in ('IN', 'INOUT')
-  where r.routine_schema = 'public'
+  where r.routine_schema = ${schemaLiteral(schema)}
     and r.routine_type = 'FUNCTION'
     and r.data_type <> 'trigger'
   order by r.routine_name, r.specific_name, p.ordinal_position
 `;
 
-/** Primary-key columns of every `public` table, in key order. */
-const PRIMARY_KEYS_QUERY = `
+/** Primary-key columns of every table in `schema`, in key order. */
+const primaryKeysQuery = (schema: string): string => `
   select tc.table_name, kcu.column_name
   from information_schema.table_constraints tc
   join information_schema.key_column_usage kcu
     on kcu.constraint_name = tc.constraint_name
     and kcu.table_schema = tc.table_schema
   where tc.constraint_type = 'PRIMARY KEY'
-    and tc.table_schema = 'public'
+    and tc.table_schema = ${schemaLiteral(schema)}
   order by tc.table_name, kcu.ordinal_position
 `;
 
@@ -79,8 +82,8 @@ interface PrimaryKeyRow {
 /** relation → its primary-key column names, in key order. Tables without a PK are absent. */
 export type PrimaryKeyIntrospection = Record<string, string[]>;
 
-/** Every foreign key of every `public` table, one row per key column, in key order. */
-const FOREIGN_KEYS_QUERY = `
+/** Every foreign key of every table in `schema`, one row per key column, in key order. */
+const foreignKeysQuery = (schema: string): string => `
   select
     con.conname as constraint_name,
     cl.relname as from_table,
@@ -95,7 +98,7 @@ const FOREIGN_KEYS_QUERY = `
   join lateral unnest(con.confkey) with ordinality as fk(attnum, ord) on fk.ord = k.ord
   join pg_attribute att on att.attrelid = con.conrelid and att.attnum = k.attnum
   join pg_attribute fatt on fatt.attrelid = con.confrelid and fatt.attnum = fk.attnum
-  where con.contype = 'f' and ns.nspname = 'public'
+  where con.contype = 'f' and ns.nspname = ${schemaLiteral(schema)}
   order by con.conname, k.ord
 `;
 
@@ -124,8 +127,14 @@ interface FunctionRow {
   arg_type: string | null;
 }
 
-export async function introspect(run: RunQuery): Promise<Introspection> {
-  const rows = (await run(COLUMNS_QUERY)) as ColumnRow[];
+export async function introspect({
+  run,
+  schema = 'public',
+}: {
+  run: RunQuery;
+  schema?: string;
+}): Promise<Introspection> {
+  const rows = (await run(columnsQuery(schema))) as ColumnRow[];
   const relations: Introspection = {};
   for (const row of rows) {
     const columns = relations[row.table_name] ?? [];
@@ -139,8 +148,14 @@ export async function introspect(run: RunQuery): Promise<Introspection> {
   return relations;
 }
 
-export async function introspectPrimaryKeys(run: RunQuery): Promise<PrimaryKeyIntrospection> {
-  const rows = (await run(PRIMARY_KEYS_QUERY)) as PrimaryKeyRow[];
+export async function introspectPrimaryKeys({
+  run,
+  schema = 'public',
+}: {
+  run: RunQuery;
+  schema?: string;
+}): Promise<PrimaryKeyIntrospection> {
+  const rows = (await run(primaryKeysQuery(schema))) as PrimaryKeyRow[];
   const keys: PrimaryKeyIntrospection = {};
   for (const row of rows) {
     const list = keys[row.table_name] ?? [];
@@ -150,8 +165,14 @@ export async function introspectPrimaryKeys(run: RunQuery): Promise<PrimaryKeyIn
   return keys;
 }
 
-export async function introspectForeignKeys(run: RunQuery): Promise<ForeignKeyIntrospection> {
-  const rows = (await run(FOREIGN_KEYS_QUERY)) as ForeignKeyRow[];
+export async function introspectForeignKeys({
+  run,
+  schema = 'public',
+}: {
+  run: RunQuery;
+  schema?: string;
+}): Promise<ForeignKeyIntrospection> {
+  const rows = (await run(foreignKeysQuery(schema))) as ForeignKeyRow[];
   const keys: ForeignKeyIntrospection = {};
   const byConstraint: Record<string, IntrospectedForeignKey> = {};
   for (const row of rows) {
@@ -169,8 +190,14 @@ export async function introspectForeignKeys(run: RunQuery): Promise<ForeignKeyIn
   return keys;
 }
 
-export async function introspectFunctions(run: RunQuery): Promise<FunctionIntrospection> {
-  const rows = (await run(FUNCTIONS_QUERY)) as FunctionRow[];
+export async function introspectFunctions({
+  run,
+  schema = 'public',
+}: {
+  run: RunQuery;
+  schema?: string;
+}): Promise<FunctionIntrospection> {
+  const rows = (await run(functionsQuery(schema))) as FunctionRow[];
   const functions: FunctionIntrospection = {};
   const chosenOverload: Record<string, string> = {};
   for (const row of rows) {

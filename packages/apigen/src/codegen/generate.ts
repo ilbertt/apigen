@@ -40,10 +40,10 @@ export async function generateFromSql({
   try {
     await db.exec(migrations);
     const run: RunQuery = async (sql) => (await db.query(sql)).rows;
-    const introspection = await introspect(run);
-    const functions = await introspectFunctions(run);
-    const primaryKeys = await introspectPrimaryKeys(run);
-    const foreignKeys = await introspectForeignKeys(run);
+    const introspection = await introspect({ run });
+    const functions = await introspectFunctions({ run });
+    const primaryKeys = await introspectPrimaryKeys({ run });
+    const foreignKeys = await introspectForeignKeys({ run });
     return emit({ introspection, functions, primaryKeys, foreignKeys, moduleSpecifier });
   } finally {
     await db.close();
@@ -63,9 +63,9 @@ export async function generateFromDb({
 }): Promise<string> {
   const adapter = resolveAdapter(db);
   const run: RunQuery = (sql) => adapter.execute({ text: sql, values: [] });
-  const introspection = await introspect(run);
-  const functions = await introspectFunctions(run);
-  const primaryKeys = await introspectPrimaryKeys(run);
-  const foreignKeys = await introspectForeignKeys(run);
+  const introspection = await introspect({ run });
+  const functions = await introspectFunctions({ run });
+  const primaryKeys = await introspectPrimaryKeys({ run });
+  const foreignKeys = await introspectForeignKeys({ run });
   return emit({ introspection, functions, primaryKeys, foreignKeys, moduleSpecifier });
 }

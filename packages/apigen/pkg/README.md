@@ -247,6 +247,27 @@ interface Adapter {
 `@ilbertt/apigen/adapters`. Each request runs in one transaction. The database
 speaks TCP, so apigen runs on server runtimes, not edge/Workers.
 
+## Schemas
+
+apigen exposes one schema by default. To expose more, pass `schemas` and mount a
+relation under one with `relation(name, { schema })`:
+
+```ts
+const app = new Apigen({
+  db: sql,
+  catalog, // the default schema (usually `public`)
+  schemas: { analytics: { catalog: analyticsCatalog } },
+})
+  .use(relation('orders').select({}))
+  .use(relation('events', { schema: 'analytics' }).select({}));
+```
+
+Clients pick the schema per request, exactly like PostgREST: `Accept-Profile: <schema>`
+on reads, `Content-Profile: <schema>` on writes. The first schema is the default; every
+response echoes `Content-Profile`, and an unknown schema is a `406`. Set `defaultSchema`
+if your default isn't `public`. `apigen gen` emits the default schema's catalog today —
+hand-write (or generate and merge) the extra schemas' catalogs.
+
 ## CLI
 
 `apigen gen` writes `api.gen.ts` from either a running Postgres (`--database-url`)

@@ -3,7 +3,7 @@
 -- deterministic and re-runnable: created_at is pinned (not now()) and identity is
 -- restarted so inserted rows get stable ids. That is why it can't just reuse
 -- fixtures/seed.sql.
-truncate orgs, orders, order_items, products restart identity cascade;
+truncate orgs, orders, order_items, products, inventory.widgets restart identity cascade;
 
 insert into orgs (id, name) values
   ('11111111-1111-1111-1111-111111111111', 'Acme'),
@@ -22,3 +22,8 @@ insert into order_items (order_id, org_id, sku, qty, price) values
 insert into products (sku, name, price, stock) values
   ('WIDGET', 'Widget', 25.00, 100),
   ('GADGET', 'Gadget', 50.00, 40);
+
+-- In the second schema, reached only via Accept-Profile/Content-Profile: inventory.
+insert into inventory.widgets (id, label, qty) values
+  (1, 'Gadget', 7),
+  (2, 'Gizmo', 3);

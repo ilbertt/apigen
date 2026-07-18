@@ -37,14 +37,13 @@ Docker-free).
 Every row is ✅ (a live differential case guarantees parity), 🚧 (a tracked gap), or ⊘
 (an intentional divergence — see below). The goal is to move every 🚧 to ✅.
 
-Two features are marked ⊘ as deliberate boundaries, not gaps:
+One feature is marked ⊘ as a deliberate boundary, not a gap:
 
-- **Multi-schema (`Accept-Profile`/`Content-Profile`)** — apigen exposes one schema by
-  design (the generated catalog is single-schema), so schema selection per request is out
-  of scope.
-- **OpenAPI root document** — matching PostgREST's generated Swagger document byte-for-byte
-  is impractical and low-value; the schema is already available as the typed generated
-  client, so apigen doesn't serve an OpenAPI description.
+- **OpenAPI root document** — PostgREST's `GET /` serves a Swagger document that embeds its
+  own version string (`"version":"12.2.3 (…)"`) and host, so matching it byte-for-byte would
+  mean impersonating a specific PostgREST build — not honest compatibility, and brittle across
+  versions. The schema is already available as the typed generated client, so apigen doesn't
+  serve an OpenAPI description.
 
 | Area | Feature | Status |
 | --- | --- | --- |
@@ -79,5 +78,5 @@ Two features are marked ⊘ as deliberate boundaries, not gaps:
 | Negotiation | `HEAD` (GET headers, no body) + `OPTIONS` (`Allow`) | ✅ |
 | Negotiation | CSV output (`Accept: text/csv`) | ✅ |
 | Negotiation | CSV input (`Content-Type: text/csv`) | ✅ |
-| Negotiation | `Accept-Profile`/`Content-Profile` (multi-schema) | ⊘ single-schema by design |
+| Negotiation | `Accept-Profile`/`Content-Profile` (multi-schema) | ✅ |
 | Negotiation | OpenAPI root document | ⊘ out of scope (see below) |

@@ -41,3 +41,14 @@ create table products (
   price numeric(12, 2) not null default 0,
   stock integer not null default 0
 );
+
+-- A second exposed schema, selected per-request via Accept-Profile (reads) /
+-- Content-Profile (writes). `widgets` lives ONLY here, so a request without the
+-- profile header can't reach it — that is what proves schema routing works.
+create schema inventory;
+
+create table inventory.widgets (
+  id integer primary key,
+  label text not null,
+  qty integer not null default 0
+);
