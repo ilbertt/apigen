@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  unit:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -15,26 +15,13 @@ jobs:
 
       - uses: ./.github/actions/prepare
 
-      - name: Run unit tests
-        working-directory: packages/apigen
-        run: bun run test:unit
-
-  postgres-compliance:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - uses: ./.github/actions/prepare
-
-      - name: Run Postgres compliance tests
-        working-directory: packages/apigen
-        run: bun run test:postgres-compliance
+      - name: Run all tests
+        run: bun run test
 
   tests-passed:
     if: always()
     name: tests:required
-    needs: [unit, postgres-compliance]
+    needs: [tests]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed

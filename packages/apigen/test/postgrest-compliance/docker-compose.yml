@@ -1,14 +1,14 @@
-name: apigen-postgres-compliance
+name: apigen-postgrest-compliance
 
 # Stands up a real PostgREST in front of a Postgres seeded with the shared test
 # fixtures. The compliance test (compliance.test.ts) fires the same requests at
 # this PostgREST and at apigen in-process, both pointed at this same database.
 #
-#   docker compose -f test/postgres-compliance/docker-compose.yml up -d --wait
-#   bun test test/postgres-compliance
-#   docker compose -f test/postgres-compliance/docker-compose.yml down -v
+#   docker compose -f test/postgrest-compliance/docker-compose.yml up -d --wait
+#   bun test test/postgrest-compliance
+#   docker compose -f test/postgrest-compliance/docker-compose.yml down -v
 #
-# or just: bun run test:postgres-compliance
+# or just: bun run test:postgrest-compliance
 
 services:
   postgres:

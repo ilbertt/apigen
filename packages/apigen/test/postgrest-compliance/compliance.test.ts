@@ -8,7 +8,7 @@
  * down, so there is no env gate. It lives in its own folder and is NOT part of the
  * default unit-test command (which stays hermetic and Docker-free) — run it with:
  *
- *   bun run test:postgres-compliance
+ *   bun run test:postgrest-compliance
  *
  * Both systems share one database, so each case reseeds to a deterministic state
  * before EACH side — writes don't cross-contaminate and there is no now() drift.

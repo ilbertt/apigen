@@ -99,7 +99,7 @@ export async function createFixtureDb(): Promise<TestDb> {
 }
 
 /**
- * Connect to an already-running Postgres by URL (the Postgres compliance suite points
+ * Connect to an already-running Postgres by URL (the PostgREST compliance suite points
  * this at the Docker container). Unlike {@link createTestDb} this opens no PGlite —
  * the database lifecycle is owned by docker-compose.
  */
