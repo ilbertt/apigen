@@ -208,6 +208,27 @@ test('order / limit / offset', async () => {
   expect((await rows(offset)).map((r) => r.customer)).toEqual(['Bob']);
 });
 
+test('pagination: the Range header offsets/limits, and limit/offset params win over it', async () => {
+  const withRange = (query: string, range: string): Promise<Response> =>
+    app.handle(new Request(`http://localhost${query}`, { headers: { 'x-org-id': ORG1, range } }));
+  // ORG1 in id order: Alice, Bob. Range 0-0 → first row only.
+  const first = await withRange('/orders?order=id', '0-0');
+  expect((await rows(first)).map((r) => r.customer)).toEqual(['Alice']);
+  expect(first.headers.get('content-range')).toBe('0-0/*');
+  // A limit/offset query param takes precedence over the legacy Range header.
+  const overridden = await withRange('/orders?order=id&limit=2', '0-0');
+  expect((await rows(overridden)).map((r) => r.customer)).toEqual(['Alice', 'Bob']);
+});
+
+test('an unparseable Range header is a 400', async () => {
+  const res = await app.handle(
+    new Request('http://localhost/orders?order=id', {
+      headers: { 'x-org-id': ORG1, range: 'abc' },
+    }),
+  );
+  expect(res.status).toBe(400);
+});
+
 test('?select projects only requested columns', async () => {
   const res = await get('/orders?select=customer,amount', ORG1);
   const [row] = await rows(res);

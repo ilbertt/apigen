@@ -51,7 +51,7 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Vertical filter | aggregates `col.sum()`/`count()`/… | 🚧 |
 | Ordering | `order` with `asc`/`desc`/`nullsfirst`/`nullslast` | ✅ |
 | Pagination | `limit` / `offset` | ✅ |
-| Pagination | `Range` / `Range-Unit` request header | 🚧 |
+| Pagination | `Range` / `Range-Unit` request header | ✅ |
 | Counting | `Prefer: count=exact` (`Content-Range`, `206`) | ✅ |
 | Counting | `count=planned` / `count=estimated` | 🚧 |
 | Response | singular `application/vnd.pgrst.object+json` (`406 PGRST116`) | ✅ |

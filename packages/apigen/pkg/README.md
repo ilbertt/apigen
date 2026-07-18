@@ -165,6 +165,7 @@ number, and `timestamptz` as ISO-8601.
 
 - **Reads** return a JSON array plus a `Content-Range` header (`0-9/*`). `Prefer:
   count=exact` fills in the total (`0-9/42`) and answers `206` when the page is partial.
+  Paginate with `limit`/`offset` or a `Range: 0-9` header (`limit`/`offset` win if both).
 - **Writes** default to `Prefer: return=minimal`: `POST` → `201` empty, `PATCH`/`DELETE`
   → `204` empty. Send `Prefer: return=representation` to get the affected rows back.
 - **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
