@@ -155,6 +155,8 @@ export interface ParsedRequest {
   readonly offset?: number;
   /** `on_conflict` columns — the upsert conflict target; defaults to the primary key. */
   readonly onConflict?: readonly string[];
+  /** `columns` — the explicit insert column set (body keys outside it are ignored). */
+  readonly columns?: readonly string[];
 }
 
 export type MaybePromise<T> = T | Promise<T>;

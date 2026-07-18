@@ -7,17 +7,19 @@ import {
   compileSelect,
   compileUpdate,
 } from './compile.js';
-import type {
-  Adapter,
-  Catalog,
-  FunctionArgs,
-  FunctionCatalog,
-  FunctionConfig,
-  FunctionModule,
-  Op,
-  PrimaryKeys,
-  RelationColumns,
-  RelationModule,
+import {
+  type Adapter,
+  type Catalog,
+  type FunctionArgs,
+  type FunctionCatalog,
+  type FunctionConfig,
+  type FunctionModule,
+  isFilterGroup,
+  type Op,
+  type PrimaryKeys,
+  type RelationColumns,
+  type RelationModule,
+  type WhereNode,
 } from './contract.js';
 import { ApiError, buildResponse, HttpStatus, jsonError } from './http.js';
 import { filterColumns, parseRequest } from './parse.js';
@@ -25,6 +27,7 @@ import { filterColumns, parseRequest } from './parse.js';
 const METHOD_OP: Record<string, Op> = {
   GET: 'select',
   POST: 'insert',
+  PUT: 'insert', // a single-row upsert keyed by the PK; dispatched to handlePut
   PATCH: 'update',
   DELETE: 'delete',
 };
@@ -463,7 +466,9 @@ async function handleInsert({
   if (rows.length === 0) {
     badRequest('Insert body must contain at least one row');
   }
-  const insertColumns = Object.keys(rows[0] as Row);
+  // `columns=` fixes the insert column set (body keys outside it are ignored, and its
+  // columns absent from a row bind NULL); otherwise the first row's keys define it.
+  const insertColumns = parsed.columns ?? Object.keys(rows[0] as Row);
   if (insertColumns.length === 0) {
     badRequest('Insert row must have at least one column');
   }
@@ -528,6 +533,109 @@ async function handleInsert({
     minimalStatus: status,
     location,
   });
+}
+
+/** The URL filter of a PUT must be exactly the PK columns, each an `eq` — else not a PUT target. */
+function pkEqValues({
+  filters,
+  pk,
+}: {
+  filters: readonly WhereNode[];
+  pk: readonly string[];
+}): Map<string, string> | undefined {
+  if (pk.length === 0 || filters.length !== pk.length) {
+    return undefined;
+  }
+  const values = new Map<string, string>();
+  for (const node of filters) {
+    if (isFilterGroup(node) || node.op !== 'eq' || node.negated || !pk.includes(node.column)) {
+      return undefined;
+    }
+    values.set(node.column, node.value);
+  }
+  return values.size === pk.length ? values : undefined;
+}
+
+async function handlePut({
+  req,
+  url,
+  relation,
+  columns,
+  module,
+  adapter,
+  primaryKeys,
+}: {
+  req: Request;
+  url: URL;
+  relation: string;
+  columns: RelationColumns;
+  module: RelationModule;
+  adapter: Adapter;
+  primaryKeys: PrimaryKeys;
+}): Promise<Response> {
+  const parsed = parseRequest(url);
+  const pk = primaryKeys[relation] ?? [];
+  // PUT addresses a single row by its whole PK; anything else isn't a valid PUT target.
+  const pkFilter = pkEqValues({ filters: parsed.filters, pk });
+  if (pkFilter === undefined) {
+    throw new ApiError({
+      status: HttpStatus.MethodNotAllowed,
+      message: 'PUT requires filtering by the entire primary key with eq',
+    });
+  }
+  const auth = await authorize({ req, op: 'insert', module, columns });
+  const body = await readBody(req);
+  if (Array.isArray(body) || typeof body !== 'object' || body === null) {
+    badRequest('PUT body must be a single JSON object');
+  }
+  const row = body as Row;
+  for (const col of pk) {
+    if (String(row[col]) !== pkFilter.get(col)) {
+      badRequest(`PUT body primary key "${col}" does not match the URL`);
+    }
+  }
+  const insertColumns = parsed.columns ?? Object.keys(row);
+  if (insertColumns.length === 0) {
+    badRequest('PUT body must have at least one column');
+  }
+  ensureAllowed({ cols: insertColumns, auth, relation });
+  const prefs = parsePreferences(req);
+  const returning = parsed.select ?? auth.allowedColumns.map((column) => ({ column }));
+  ensureAllowed({ cols: returning.map((item) => item.column), auth, relation });
+
+  const { query, rowCount } = compileInsert({
+    relation,
+    columns,
+    rows: [row],
+    insertColumns,
+    policy: auth.policy,
+    returning,
+    conflict: { columns: pk, action: 'merge' },
+  });
+  const result = await adapter.transaction(async (tx) => {
+    const rendered = (await tx.execute(query))[0] as Rendered;
+    if (rendered.page !== rowCount) {
+      throw new ApiError({
+        status: HttpStatus.Forbidden,
+        message: `PUT on "${relation}" violates the WITH CHECK policy`,
+      });
+    }
+    return rendered;
+  });
+  // PUT emits no Content-Range. Without a representation the answer is always 204; with
+  // one it is 200 when a row was updated, 201 when inserted.
+  const representation = prefs.return === 'representation';
+  const status = representation
+    ? result.updated === 1
+      ? HttpStatus.Ok
+      : HttpStatus.Created
+    : HttpStatus.NoContent;
+  const headers: Record<string, string> = {};
+  const applied = preferenceApplied(prefs);
+  if (applied !== undefined) {
+    headers['preference-applied'] = applied;
+  }
+  return buildResponse({ status, body: representation ? result.body : null, headers });
 }
 
 async function handleUpdate({
@@ -742,7 +850,7 @@ export async function handleRequest({
         response = await handleSelect(args);
         break;
       case 'insert':
-        response = await handleInsert(args);
+        response = req.method === 'PUT' ? await handlePut(args) : await handleInsert(args);
         break;
       case 'update':
         response = await handleUpdate(args);

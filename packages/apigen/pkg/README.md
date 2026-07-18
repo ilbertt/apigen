@@ -173,7 +173,10 @@ number, and `timestamptz` as ISO-8601.
   pointing at the new row's primary key.
 - **Upsert**: `POST` with `Prefer: resolution=merge-duplicates` (or `ignore-duplicates`)
   and an optional `on_conflict=<cols>` (defaults to the primary key) — `200` when it
-  updated an existing row, `201` when it inserted.
+  updated an existing row, `201` when it inserted. `PUT ?<pk>=eq.<v>` upserts a single row
+  keyed by its whole primary key.
+- **`columns=<cols>`** on an insert fixes the column set — body keys outside it are
+  ignored and the rest take their database defaults.
 - **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
   `406` (`PGRST116`) when the result isn't exactly one row.
 - **Errors** use PostgREST's envelope, `{ code, details, hint, message }`, passing the

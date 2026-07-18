@@ -14,7 +14,7 @@ import {
 } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
-const RESERVED = new Set(['select', 'order', 'limit', 'offset', 'on_conflict']);
+const RESERVED = new Set(['select', 'order', 'limit', 'offset', 'on_conflict', 'columns']);
 const FILTER_OP_SET = new Set<string>(FILTER_OPS);
 const FTS_OP_SET = new Set<string>(FTS_OPS);
 const QUANTIFIABLE_OP_SET = new Set<string>(QUANTIFIABLE_OPS);
@@ -373,14 +373,14 @@ export function parseRequest(url: URL): ParsedRequest {
     filters.push(parseFilter({ column: assertColumn(key), raw }));
   }
 
-  const onConflictRaw = params.get('on_conflict');
-  const onConflict = onConflictRaw
-    ? onConflictRaw
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0)
-        .map(assertColumn)
-    : undefined;
+  const columnList = (raw: string | null): readonly string[] | undefined =>
+    raw
+      ? raw
+          .split(',')
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
+          .map(assertColumn)
+      : undefined;
 
   return {
     select: parseSelect(params.get('select')),
@@ -388,6 +388,7 @@ export function parseRequest(url: URL): ParsedRequest {
     order: parseOrder(params.get('order')),
     limit: parseNonNegativeInt({ raw: params.get('limit'), name: 'limit' }),
     offset: parseNonNegativeInt({ raw: params.get('offset'), name: 'offset' }),
-    onConflict,
+    onConflict: columnList(params.get('on_conflict')),
+    columns: columnList(params.get('columns')),
   };
 }

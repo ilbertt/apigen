@@ -7,7 +7,7 @@
  */
 export interface DiffCase {
   readonly name: string;
-  readonly method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly path: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: unknown;
@@ -265,6 +265,45 @@ export const CASES: DiffCase[] = [
     headers: { prefer: 'resolution=merge-duplicates,return=representation' },
     body: { sku: 'WIDGET', name: 'Widget PK', price: 26, stock: 9 },
   },
+
+  // columns=: only the named columns are inserted; the rest take DB defaults
+  {
+    name: 'insert with columns= (rest default)',
+    method: 'POST',
+    path: '/products?columns=sku,name',
+    headers: { prefer: 'return=representation' },
+    body: { sku: 'ZED', name: 'Zed', price: 999, stock: 999 },
+  },
+
+  // PUT: single-row upsert keyed by the whole PK (no Content-Range; 200 update / 201 insert)
+  {
+    name: 'put existing (representation → 200)',
+    method: 'PUT',
+    path: '/products?sku=eq.WIDGET',
+    headers: { prefer: 'return=representation' },
+    body: { sku: 'WIDGET', name: 'Widget v3', price: 31, stock: 8 },
+  },
+  {
+    name: 'put existing (minimal → 204)',
+    method: 'PUT',
+    path: '/products?sku=eq.WIDGET',
+    body: { sku: 'WIDGET', name: 'Widget v4', price: 32, stock: 6 },
+  },
+  {
+    name: 'put new (representation → 201)',
+    method: 'PUT',
+    path: '/products?sku=eq.NEWBIE',
+    headers: { prefer: 'return=representation' },
+    body: { sku: 'NEWBIE', name: 'Newbie', price: 1, stock: 1 },
+  },
+  {
+    name: 'put new (minimal)',
+    method: 'PUT',
+    path: '/products?sku=eq.FRESH',
+    body: { sku: 'FRESH', name: 'Fresh', price: 2, stock: 2 },
+  },
+  // PUT's 405 (non-PK filter) and 400 (PK mismatch) are apigen-generated error bodies,
+  // which don't match PostgREST byte-for-byte — they're asserted in the hermetic suite.
 
   // singular response
   {
