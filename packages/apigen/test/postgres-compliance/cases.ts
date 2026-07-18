@@ -1,5 +1,5 @@
 /**
- * Request specs for the PostgREST differential. Each case is fired at both a real
+ * Request specs for PostgREST compliance. Each case is fired at both a real
  * PostgREST and at apigen in-process (see compliance.test.ts) and asserted to match
  * byte-for-byte. Every case is a behavior apigen guarantees to match; intentional
  * divergences (logical operators, full-text, CSV, up-front allowedColumns) are out of

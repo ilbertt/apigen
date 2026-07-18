@@ -22,9 +22,9 @@
     "build:lib": "bun run --bun tsc -p tsconfig.build.json",
     "codegen": "parsh-codegen generate --commands src/codegen/cli/commands --out src/codegen/cli/command-tree.gen.ts --eager",
     "check:types": "bun run --bun tsc",
-    "test": "bun run test:unit && bun run test:differential",
+    "test": "bun run test:unit && bun run test:postgres-compliance",
     "test:unit": "bun test test/unit",
-    "test:differential": "bun test test/differential"
+    "test:postgres-compliance": "bun test test/postgres-compliance"
   },
   "dependencies": {},
   "peerDependencies": {

@@ -1,14 +1,14 @@
-name: apigen-differential
+name: apigen-postgres-compliance
 
 # Stands up a real PostgREST in front of a Postgres seeded with the shared test
-# fixtures. The differential test (compliance.test.ts) fires the same requests at
+# fixtures. The compliance test (compliance.test.ts) fires the same requests at
 # this PostgREST and at apigen in-process, both pointed at this same database.
 #
-#   docker compose -f test/differential/docker-compose.yml up -d --wait
-#   APIGEN_DIFF=1 bun test test/differential
-#   docker compose -f test/differential/docker-compose.yml down -v
+#   docker compose -f test/postgres-compliance/docker-compose.yml up -d --wait
+#   bun test test/postgres-compliance
+#   docker compose -f test/postgres-compliance/docker-compose.yml down -v
 #
-# or just: bun run test:diff
+# or just: bun run test:postgres-compliance
 
 services:
   postgres:

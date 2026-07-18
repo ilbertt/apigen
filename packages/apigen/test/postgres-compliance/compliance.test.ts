@@ -1,14 +1,14 @@
 /**
- * PostgREST differential: fire each {@link CASES} spec at a real PostgREST and at
+ * PostgREST compliance: fire each {@link CASES} spec at a real PostgREST and at
  * apigen in-process, both backed by the SAME Postgres, and assert the responses
  * match. This is the compliance oracle — expected values come from PostgREST, not
  * from our reading of the docs.
  *
  * Self-contained: `beforeAll` brings the Docker stack up and `afterAll` tears it
  * down, so there is no env gate. It lives in its own folder and is NOT part of the
- * default `bun test` (which stays hermetic and Docker-free) — run it with:
+ * default unit-test command (which stays hermetic and Docker-free) — run it with:
  *
- *   bun run test:diff        # = bun test test/differential
+ *   bun run test:postgres-compliance
  *
  * Both systems share one database, so each case reseeds to a deterministic state
  * before EACH side — writes don't cross-contaminate and there is no now() drift.
@@ -118,7 +118,7 @@ async function reseed(): Promise<void> {
   await sql.unsafe(seedSql);
 }
 
-describe('PostgREST differential', () => {
+describe('PostgREST compliance', () => {
   beforeAll(async () => {
     await $`docker compose -f ${COMPOSE_FILE} up -d --wait`.quiet();
     seedSql = await Bun.file(join(import.meta.dir, 'seed.sql')).text();

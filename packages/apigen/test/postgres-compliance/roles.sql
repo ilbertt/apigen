@@ -1,6 +1,6 @@
--- Roles for the PostgREST differential harness.
+-- Roles for the PostgREST compliance suite.
 --
--- The differential compares query translation and the HTTP response envelope,
+-- The compliance suite compares query translation and the HTTP response envelope,
 -- NOT authorization: apigen mounts these relations publicly and PostgREST serves
 -- them through `anon` with blanket grants and no RLS. Policy/RLS parity is covered
 -- separately by the hermetic features.test.ts / matrix.test.ts suites.

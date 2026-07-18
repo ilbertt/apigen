@@ -1,4 +1,4 @@
-name: checks
+name: tests
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  types:
+  unit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -15,10 +15,11 @@ jobs:
 
       - uses: ./.github/actions/prepare
 
-      - name: Check Types
-        run: bun check:types
+      - name: Run unit tests
+        working-directory: packages/apigen
+        run: bun run test:unit
 
-  codestyle:
+  postgres-compliance:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -26,13 +27,14 @@ jobs:
 
       - uses: ./.github/actions/prepare
 
-      - name: Check JS Codestyle
-        run: bun check:codestyle
+      - name: Run Postgres compliance tests
+        working-directory: packages/apigen
+        run: bun run test:postgres-compliance
 
-  checks-passed:
+  tests-passed:
     if: always()
-    name: checks:required
-    needs: [types, codestyle]
+    name: tests:required
+    needs: [unit, postgres-compliance]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs passed

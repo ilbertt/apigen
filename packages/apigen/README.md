@@ -61,20 +61,20 @@ first so the bundle can't embed a stale tree.
 
 - `bun run check:types` — `tsc` (no emit)
 - `bun run codegen` — regenerate the parsh command tree
-- `bun run test` — runs both suites below (`test:unit && test:differential`).
+- `bun run test` — runs both suites below (`test:unit && test:postgres-compliance`).
 - `bun run test:unit` (`bun test test/unit`) — hermetic suite against pglite-socket + a
   postgres.js devDependency. No Docker. Fixtures (migrations + seed) live under
   `test/fixtures/`; the socket helper is `test/helpers/db.ts`. The committed
   `test/unit/__generated__/*.gen.ts` files (`todos.gen.ts`, `functions.gen.ts`) are
   codegen fixtures kept in the tsconfig include so `check:types` also typechecks emitted
   output; the codegen tests regenerate them.
-- `bun run test:differential` (`bun test test/differential`) — the **PostgREST
-  differential** (needs Docker). It stands up a real PostgREST v12 in front of Postgres,
+- `bun run test:postgres-compliance` (`bun test test/postgres-compliance`) — the
+  **PostgREST compliance suite** (needs Docker). It stands up a real PostgREST v12 in front of Postgres,
   fires the request table in `cases.ts` at both PostgREST and apigen (mounted publicly on
   the same database), and asserts the responses match **byte-for-byte** — status,
   headers, and raw body. It is the compliance oracle: expected values come from
   PostgREST, not from us. The suite spins the Docker stack up/down itself (in
-  `beforeAll`/`afterAll`). Unit and differential live in separate folders so the fast
+  `beforeAll`/`afterAll`). Unit and Postgres compliance tests live in separate folders so the fast
   hermetic loop (`test:unit`) stays Docker-free. Every case is a behavior apigen must
   match; intentional divergences (logical operators, CSV, up-front `allowedColumns`) are
   out of scope and listed under "Not included" in the public README, not tested here.

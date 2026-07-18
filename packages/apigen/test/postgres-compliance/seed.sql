@@ -1,4 +1,4 @@
--- Deterministic seed for the differential harness. PostgREST and apigen hit the
+-- Deterministic seed for the PostgREST compliance suite. PostgREST and apigen hit the
 -- SAME database and each case reseeds before BOTH sides, so this has to be fully
 -- deterministic and re-runnable: created_at is pinned (not now()) and identity is
 -- restarted so inserted rows get stable ids. That is why it can't just reuse
