@@ -2,6 +2,7 @@ import {
   FILTER_OPS,
   type Filter,
   type FilterOp,
+  FTS_OPS,
   type OrderTerm,
   type ParsedRequest,
 } from './contract.js';
@@ -9,6 +10,9 @@ import { ApiError, HttpStatus } from './http.js';
 
 const RESERVED = new Set(['select', 'order', 'limit', 'offset']);
 const FILTER_OP_SET = new Set<string>(FILTER_OPS);
+const FTS_OP_SET = new Set<string>(FTS_OPS);
+/** `op` or `op(config)` followed by `.` — the config parens tolerate dots (`pg_catalog.english`). */
+const OP_RE = /^([a-zA-Z]+)(?:\(([^)]*)\))?\./;
 const IS_VALUES = new Set(['null', 'true', 'false', 'unknown']);
 const COLUMN_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -84,6 +88,11 @@ function parseOperand({
   if (op === 'like' || op === 'ilike') {
     return { column, op, value: toLikePattern(rest) };
   }
+  if (FTS_OP_SET.has(op)) {
+    // The tsquery is passed to to_tsquery/websearch_to_tsquery verbatim — quotes are
+    // meaningful there (websearch phrases), so it is neither unquoted nor `*`-rewritten.
+    return { column, op, value: rest };
+  }
   // eq/neq/gt/gte/lt/lte/isdistinct/match/imatch: a single scalar operand. match
   // and imatch take a POSIX regex, so `*` is NOT rewritten to `%` (that is `like`).
   return { column, op, value: stripQuotes(rest) };
@@ -92,17 +101,22 @@ function parseOperand({
 function parseFilter({ column, raw }: { column: string; raw: string }): Filter {
   const negated = raw.startsWith(NOT_PREFIX);
   const body = negated ? raw.slice(NOT_PREFIX.length) : raw;
-  const dot = body.indexOf('.');
-  if (dot === -1) {
+  const match = OP_RE.exec(body);
+  const opToken = match?.[1];
+  if (match === null || opToken === undefined) {
     badRequest(`Filter "${column}=${raw}" must be "op.value"`);
   }
-  const opToken = body.slice(0, dot);
-  const rest = body.slice(dot + 1);
+  const config = match[2];
+  const rest = body.slice(match[0]?.length ?? 0);
   if (!FILTER_OP_SET.has(opToken)) {
     badRequest(`Unsupported filter operator "${opToken}" on column "${column}"`);
   }
+  if (config !== undefined && !FTS_OP_SET.has(opToken)) {
+    badRequest(`Operator "${opToken}" does not take a "(config)"`);
+  }
   const operand = parseOperand({ column, op: opToken as FilterOp, rest });
-  return negated ? { ...operand, negated } : operand;
+  const withConfig = config === undefined ? operand : { ...operand, config };
+  return negated ? { ...withConfig, negated } : withConfig;
 }
 
 function parseOrder(raw: string | null): OrderTerm[] {

@@ -144,10 +144,11 @@ export const products = relation('products').select({
 ## Query parameters (PostgREST subset)
 
 `select`, the filters `eq neq gt gte lt lte in is isdistinct like ilike match imatch`
-(each optionally negated with a `not.` prefix, e.g. `customer=not.eq.Alice`), `order`
-(`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast
-to the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a
-400 and never reaches the database.
+and full-text `fts plfts phfts wfts` (with an optional `(config)`, e.g.
+`description=fts(english).red`) — each optionally negated with a `not.` prefix, e.g.
+`customer=not.eq.Alice`. Plus `order` (`asc`/`desc`, `nullsfirst`/`nullslast`),
+`limit`, `offset`. Filter values are cast to the column's catalog type; a value that
+doesn't fit (text for an `int8`, say) is a 400 and never reaches the database.
 
 Method → operation: `GET` select, `POST` insert, `PATCH` update, `DELETE` delete.
 
@@ -231,9 +232,9 @@ bunx apigen gen --help
 
 ## Not included (yet)
 
-Logical operators (`or`/`and`/`not`), full-text search, CSV and other content types,
-embeds, OpenAPI generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1
-dialects are out of scope for now. apigen also enforces `allowedColumns` up front (a
+Logical operators (`or`/`and`/`not`), CSV and other content types, embeds, OpenAPI
+generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of
+scope for now. apigen also enforces `allowedColumns` up front (a
 `403`) instead of deferring to Postgres, so an unknown or forbidden column is rejected
 before the query runs.
 

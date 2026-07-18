@@ -17,7 +17,8 @@ create table orders (
   status text not null default 'pending',
   paid boolean not null default false,
   created_at timestamptz not null default now(),
-  note text -- nullable on purpose: exercises NULL semantics (is/isdistinct/negation)
+  note text, -- nullable on purpose: exercises NULL semantics (is/isdistinct/negation)
+  description text not null default '' -- prose for full-text search (fts/plfts/phfts/wfts)
 );
 
 create table order_items (

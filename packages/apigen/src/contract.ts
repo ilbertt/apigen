@@ -55,8 +55,15 @@ export const FILTER_OPS = [
   'ilike',
   'match',
   'imatch',
+  'fts',
+  'plfts',
+  'phfts',
+  'wfts',
 ] as const;
 export type FilterOp = (typeof FILTER_OPS)[number];
+
+/** The full-text-search operators; the only ones that accept an `op(config)` language. */
+export const FTS_OPS = ['fts', 'plfts', 'phfts', 'wfts'] as const;
 
 export interface Filter {
   readonly column: string;
@@ -67,6 +74,8 @@ export interface Filter {
   readonly values?: readonly string[];
   /** `not.` prefix — the whole condition is wrapped in SQL `NOT (…)`. */
   readonly negated?: boolean;
+  /** Full-text-search language config from `op(config)`, e.g. `fts(english)`. */
+  readonly config?: string;
 }
 
 export interface OrderTerm {

@@ -22,6 +22,14 @@ const SCALAR_OP_SQL: Record<string, string> = {
   lte: '<=',
 };
 
+/** Full-text-search operator → the tsquery constructor it compiles against `@@`. */
+const FTS_FN: Record<string, string> = {
+  fts: 'to_tsquery',
+  plfts: 'plainto_tsquery',
+  phfts: 'phraseto_tsquery',
+  wfts: 'websearch_to_tsquery',
+};
+
 const CAST_TYPE_RE = /^[a-zA-Z0-9_]+$/;
 
 /** RETURNING sentinel used only by update's WITH CHECK re-verification. */
@@ -95,6 +103,17 @@ function filterCondition({ filter, id, pgType }: { filter: Filter; id: Sql; pgTy
       return sql`${id} ~ ${filter.value}::text`;
     case 'imatch':
       return sql`${id} ~* ${filter.value}::text`;
+    case 'fts':
+    case 'plfts':
+    case 'phfts':
+    case 'wfts': {
+      const fn = raw(FTS_FN[filter.op] as string);
+      const tsquery =
+        filter.config === undefined
+          ? sql`${fn}(${filter.value}::text)`
+          : sql`${fn}(${filter.config}::regconfig, ${filter.value}::text)`;
+      return sql`${id} @@ ${tsquery}`;
+    }
     case 'is':
       return sql`${id} is ${raw(filter.value)}`;
     case 'in': {
