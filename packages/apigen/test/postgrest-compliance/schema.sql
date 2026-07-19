@@ -11,7 +11,7 @@ create table orgs (
 
 create table orders (
   id bigint generated always as identity primary key,
-  org_id uuid not null,
+  org_id uuid not null references orgs (id),
   customer text not null,
   amount numeric(12, 2) not null default 0,
   status text not null default 'pending',
@@ -24,10 +24,11 @@ create table orders (
   meta jsonb -- JSON for path selection (meta->>key / meta->key)
 );
 
+-- Foreign keys drive resource embedding: order_items→orders (one-to-many) and →orgs.
 create table order_items (
   id bigint generated always as identity primary key,
-  order_id bigint not null,
-  org_id uuid not null,
+  order_id bigint not null references orders (id),
+  org_id uuid not null references orgs (id),
   sku text not null,
   qty integer not null default 1,
   price numeric(12, 2) not null default 0

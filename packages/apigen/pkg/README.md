@@ -156,6 +156,11 @@ e.g. `id=eq(any).{1,2,3}`. Conditions combine with the logical operators `and` /
 the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a 400
 and never reaches the database.
 
+Foreign keys drive **resource embedding**: `select=*,order_items(*)` nests a related
+relation (one-to-many → array, many-to-one → object), with an optional
+`alias:relation(cols)`. The embedded relation must be exposed; its own authorization
+applies. `codegen` emits the `foreignKeys` it needs.
+
 Method → operation: `GET` select, `POST` insert, `PATCH` update, `DELETE` delete.
 
 ## Responses
@@ -247,8 +252,9 @@ bunx apigen gen --help
 
 ## Not included (yet)
 
-CSV and other content types, embeds, OpenAPI generation, divergent `withCheck`, a `pg`
-adapter, and SQLite/D1 dialects are out of scope for now. apigen also enforces `allowedColumns` up front (a
+CSV and other content types, embed modifiers (`!inner`, spread, nested), OpenAPI
+generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of
+scope for now. apigen also enforces `allowedColumns` up front (a
 `403`) instead of deferring to Postgres, so an unknown or forbidden column is rejected
 before the query runs.
 

@@ -5,6 +5,7 @@ import type {
   Catalog,
   DbInput,
   DeleteConfig,
+  ForeignKeys,
   FunctionCatalog,
   FunctionConfig,
   FunctionModule,
@@ -84,6 +85,7 @@ export interface ApigenOptions {
   catalog: Catalog;
   functions?: FunctionCatalog;
   primaryKeys?: PrimaryKeys;
+  foreignKeys?: ForeignKeys;
 }
 
 /**
@@ -95,6 +97,7 @@ export class Apigen {
   readonly #adapter: Adapter;
   readonly #catalog: Catalog;
   readonly #primaryKeys: PrimaryKeys;
+  readonly #foreignKeys: ForeignKeys;
   readonly #functionCatalog: FunctionCatalog;
   readonly #modules = new Map<string, RelationModule>();
   readonly #functions = new Map<string, FunctionModule>();
@@ -103,6 +106,7 @@ export class Apigen {
     this.#adapter = resolveAdapter(options.db);
     this.#catalog = options.catalog;
     this.#primaryKeys = options.primaryKeys ?? {};
+    this.#foreignKeys = options.foreignKeys ?? {};
     this.#functionCatalog = options.functions ?? {};
   }
 
@@ -120,6 +124,7 @@ export class Apigen {
       req,
       catalog: this.#catalog,
       primaryKeys: this.#primaryKeys,
+      foreignKeys: this.#foreignKeys,
       functionCatalog: this.#functionCatalog,
       modules: this.#modules,
       functions: this.#functions,
