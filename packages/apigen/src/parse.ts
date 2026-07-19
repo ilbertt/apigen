@@ -113,13 +113,13 @@ function parseEmbed(match: RegExpExecArray): EmbedItem {
   const spread = match[2] !== undefined;
   const relation = assertColumn(match[3] ?? '');
   const inner = match[4] !== undefined;
-  // Nested column projection; nested embeds are not yet supported and are ignored.
   const nested = parseSelect(match[5] ?? '');
   return {
     relation,
     ...(alias !== undefined && { alias }),
     ...(inner && { inner }),
     ...(spread && { spread }),
+    ...(nested.embeds.length > 0 && { embed: nested.embeds }),
     select: nested.columns,
   };
 }

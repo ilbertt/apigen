@@ -416,6 +416,18 @@ async function resolveEmbeds({
       ...(embed.order ?? []).map((o) => o.column),
     ];
     ensureAllowed({ cols: referenced, auth, relation: target });
+    // Nested embeds resolve relative to this embed's relation as their base.
+    const nested =
+      embed.embed === undefined
+        ? []
+        : await resolveEmbeds({
+            embeds: embed.embed,
+            base: target,
+            catalog,
+            modules,
+            foreignKeys,
+            req,
+          });
     plans.push({
       alias: embed.alias ?? target,
       relation: target,
@@ -428,6 +440,7 @@ async function resolveEmbeds({
       ...(embed.order && embed.order.length > 0 && { order: embed.order }),
       ...(embed.limit !== undefined && { limit: embed.limit }),
       ...(embed.offset !== undefined && { offset: embed.offset }),
+      ...(nested.length > 0 && { embeds: nested }),
       ...link,
     });
   }

@@ -18,18 +18,22 @@ const MIGRATIONS = `
     author_id integer not null references authors (id),
     title text not null
   );
+  create table reviews (id integer primary key, book_id integer not null references books (id), stars integer);
 `;
 const SEED = `
   insert into authors (id, name) values (1, 'Ada'), (2, 'Grace');
   insert into books (id, author_id, title) values (1, 1, 'Notes'), (2, 1, 'Essays');
+  insert into reviews (id, book_id, stars) values (1, 1, 5);
 `;
 const CATALOG: Catalog = {
   authors: { id: 'int4', name: 'text' },
   books: { id: 'int4', author_id: 'int4', title: 'text' },
+  reviews: { id: 'int4', book_id: 'int4', stars: 'int4' },
 };
-const PRIMARY_KEYS: PrimaryKeys = { authors: ['id'], books: ['id'] };
+const PRIMARY_KEYS: PrimaryKeys = { authors: ['id'], books: ['id'], reviews: ['id'] };
 const FOREIGN_KEYS: ForeignKeys = {
   books: [{ columns: ['author_id'], foreignRelation: 'authors', foreignColumns: ['id'] }],
+  reviews: [{ columns: ['book_id'], foreignRelation: 'books', foreignColumns: ['id'] }],
 };
 
 let db: TestDb;
@@ -44,7 +48,8 @@ beforeEach(async () => {
     foreignKeys: FOREIGN_KEYS,
   })
     .use(relation('authors').select({}))
-    .use(relation('books').select({}));
+    .use(relation('books').select({}))
+    .use(relation('reviews').select({}));
 });
 
 afterEach(async () => {
@@ -82,6 +87,18 @@ test('embedded filter/order/limit scope the nested query', async () => {
   expect(
     await json('/authors?select=name,books(title)&books.order=title.asc&books.limit=1&id=eq.1'),
   ).toEqual([{ name: 'Ada', books: [{ title: 'Essays' }] }]);
+});
+
+test('nested embeds (depth 2): author → books → reviews', async () => {
+  expect(await json('/authors?select=name,books(title,reviews(stars))&id=eq.1&order=id')).toEqual([
+    {
+      name: 'Ada',
+      books: [
+        { title: 'Notes', reviews: [{ stars: 5 }] },
+        { title: 'Essays', reviews: [] },
+      ],
+    },
+  ]);
 });
 
 test('spread ...table flattens a to-one parent into the base row', async () => {

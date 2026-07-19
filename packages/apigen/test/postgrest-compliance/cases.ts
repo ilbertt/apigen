@@ -209,6 +209,11 @@ export const CASES: DiffCase[] = [
     method: 'GET',
     path: '/order_items?select=sku,...orders(customer,amount)&order=id',
   },
+  {
+    name: 'nested embed (depth 2: org → orders → order_items)',
+    method: 'GET',
+    path: '/orgs?select=name,orders(customer,order_items(sku))&order=name',
+  },
 
   // aggregates in select (db-aggregates enabled): sum/avg/count/max/min + implicit GROUP BY
   { name: 'aggregate sum', method: 'GET', path: '/orders?select=amount.sum()' },
