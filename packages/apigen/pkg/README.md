@@ -161,7 +161,9 @@ relation (one-to-many → array, many-to-one → object), with an optional
 `alias:relation(cols)`. The embedded relation must be exposed; its own authorization
 applies. `codegen` emits the `foreignKeys` it needs.
 
-Method → operation: `GET` select, `POST` insert, `PATCH` update, `DELETE` delete.
+Method → operation: `GET` select, `POST` insert, `PUT` upsert, `PATCH` update, `DELETE`
+delete. `HEAD` runs the select for its headers but returns no body; `OPTIONS` answers
+`200` with an `Allow` header listing the methods the relation's mounts permit.
 
 ## Responses
 

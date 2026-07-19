@@ -46,6 +46,7 @@ const HEADER_KEYS = [
   'range-unit',
   'location',
   'preference-applied',
+  'allow',
 ];
 
 interface Snapshot {
