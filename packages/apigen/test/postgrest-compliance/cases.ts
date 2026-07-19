@@ -205,6 +205,25 @@ export const CASES: DiffCase[] = [
     path: '/orders?select=customer,order_items(qty)&order_items.order=qty.desc&id=eq.1',
   },
 
+  // aggregates in select (db-aggregates enabled): sum/avg/count/max/min + implicit GROUP BY
+  { name: 'aggregate sum', method: 'GET', path: '/orders?select=amount.sum()' },
+  { name: 'aggregate count()', method: 'GET', path: '/orders?select=count()' },
+  {
+    name: 'aggregate grouped by status',
+    method: 'GET',
+    path: '/orders?select=status,amount.sum(),count()&order=status',
+  },
+  {
+    name: 'aggregate aliased + cast',
+    method: 'GET',
+    path: '/orders?select=total:amount.sum()::text&status=eq.paid',
+  },
+  {
+    name: 'aggregate avg/max/min',
+    method: 'GET',
+    path: '/orders?select=amount.avg(),amount.max(),amount.min()',
+  },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },

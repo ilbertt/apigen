@@ -147,11 +147,17 @@ export interface JsonPathStep {
  * (`col->a->>b`), optionally renamed (`alias:col`) and/or cast (`col::type`). A plain
  * column has none of these.
  */
+/** Aggregate functions PostgREST allows in `select` (when db-aggregates is enabled). */
+export const AGGREGATES = ['sum', 'avg', 'count', 'max', 'min'] as const;
+export type Aggregate = (typeof AGGREGATES)[number];
+
 export interface SelectItem {
   readonly column: string;
   readonly alias?: string;
   readonly cast?: string;
   readonly path?: readonly JsonPathStep[];
+  /** An aggregate over `column`, e.g. `amount.sum()`; `count()` has an empty `column`. */
+  readonly aggregate?: Aggregate;
 }
 
 /** An embedded relation in `select`, e.g. `order_items(id,sku)` — a FK-based nested resource. */
