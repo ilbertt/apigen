@@ -207,6 +207,20 @@ export const CASES: DiffCase[] = [
     headers: { prefer: 'return=representation' },
     body: { status: 'shipped' },
   },
+  {
+    name: 'insert headers-only (Location from PK)',
+    method: 'POST',
+    path: '/orders',
+    headers: { prefer: 'return=headers-only' },
+    body: { org_id: ACME, customer: 'Dave', amount: 42.0, created_at: '2024-06-01T00:00:00Z' },
+  },
+  {
+    name: 'update headers-only',
+    method: 'PATCH',
+    path: '/orders?customer=eq.Alice',
+    headers: { prefer: 'return=headers-only' },
+    body: { status: 'shipped' },
+  },
   { name: 'delete default (minimal)', method: 'DELETE', path: '/orders?customer=eq.Bob' },
   {
     name: 'delete representation',

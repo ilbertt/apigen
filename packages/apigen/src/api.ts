@@ -10,6 +10,7 @@ import type {
   FunctionModule,
   InsertConfig,
   Op,
+  PrimaryKeys,
   RelationModule,
   SelectConfig,
   UpdateConfig,
@@ -82,6 +83,7 @@ export interface ApigenOptions {
   db: DbInput;
   catalog: Catalog;
   functions?: FunctionCatalog;
+  primaryKeys?: PrimaryKeys;
 }
 
 /**
@@ -92,6 +94,7 @@ export interface ApigenOptions {
 export class Apigen {
   readonly #adapter: Adapter;
   readonly #catalog: Catalog;
+  readonly #primaryKeys: PrimaryKeys;
   readonly #functionCatalog: FunctionCatalog;
   readonly #modules = new Map<string, RelationModule>();
   readonly #functions = new Map<string, FunctionModule>();
@@ -99,6 +102,7 @@ export class Apigen {
   constructor(options: ApigenOptions) {
     this.#adapter = resolveAdapter(options.db);
     this.#catalog = options.catalog;
+    this.#primaryKeys = options.primaryKeys ?? {};
     this.#functionCatalog = options.functions ?? {};
   }
 
@@ -115,6 +119,7 @@ export class Apigen {
     handleRequest({
       req,
       catalog: this.#catalog,
+      primaryKeys: this.#primaryKeys,
       functionCatalog: this.#functionCatalog,
       modules: this.#modules,
       functions: this.#functions,

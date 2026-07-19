@@ -20,6 +20,10 @@ export const catalog = {
 
 export type Catalog = typeof catalog;
 
+export const primaryKeys = {
+  todos: ['id'],
+} as const;
+
 export const functions = {
   add_numbers: {
     a: 'int4',
@@ -59,6 +63,6 @@ export function func<F extends keyof Functions & string>(name: F): Func {
 
 export class Apigen extends ApigenBase {
   constructor(options: { db: DbInput }) {
-    super({ db: options.db, catalog, functions });
+    super({ db: options.db, catalog, primaryKeys, functions });
   }
 }

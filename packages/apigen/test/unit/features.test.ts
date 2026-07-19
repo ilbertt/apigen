@@ -58,7 +58,8 @@ function buildApp(sql: Sql): Apigen {
     },
   });
 
-  return new Apigen({ db: sql, catalog: FIXTURE_CATALOG }).use(orders).use(orderItems);
+  const primaryKeys = { orders: ['id'], order_items: ['id'], orgs: ['id'] };
+  return new Apigen({ db: sql, catalog: FIXTURE_CATALOG, primaryKeys }).use(orders).use(orderItems);
 }
 
 let db: TestDb;
@@ -198,6 +199,20 @@ test('select: a PATCH representation honors rename/cast in RETURNING', async () 
     prefer: REPRESENTATION,
   });
   expect(await rows(res)).toEqual([{ who: 'Alice', amount: '100.00' }]);
+});
+
+test('writes: return=headers-only yields 201 + a PK-derived Location and no body', async () => {
+  const res = await send({
+    method: 'POST',
+    path: '/orders',
+    org: ORG1,
+    body: { org_id: ORG1, customer: 'Zed', amount: 5 },
+    prefer: 'return=headers-only',
+  });
+  expect(res.status).toBe(201);
+  expect(res.headers.get('location')).toMatch(/^\/orders\?id=eq\.\d+$/);
+  expect(res.headers.get('preference-applied')).toBe('return=headers-only');
+  expect(await res.text()).toBe('');
 });
 
 test('order / limit / offset', async () => {

@@ -168,7 +168,9 @@ number, and `timestamptz` as ISO-8601.
   count=exact` fills in the total (`0-9/42`) and answers `206` when the page is partial.
   Paginate with `limit`/`offset` or a `Range: 0-9` header (`limit`/`offset` win if both).
 - **Writes** default to `Prefer: return=minimal`: `POST` → `201` empty, `PATCH`/`DELETE`
-  → `204` empty. Send `Prefer: return=representation` to get the affected rows back.
+  → `204` empty. Send `Prefer: return=representation` to get the affected rows back, or
+  `Prefer: return=headers-only` for a `POST` that answers `201` + a `Location` header
+  pointing at the new row's primary key.
 - **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
   `406` (`PGRST116`) when the result isn't exactly one row.
 - **Errors** use PostgREST's envelope, `{ code, details, hint, message }`, passing the
