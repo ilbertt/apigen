@@ -153,6 +153,8 @@ export interface ParsedRequest {
   readonly order: readonly OrderTerm[];
   readonly limit?: number;
   readonly offset?: number;
+  /** `on_conflict` columns — the upsert conflict target; defaults to the primary key. */
+  readonly onConflict?: readonly string[];
 }
 
 export type MaybePromise<T> = T | Promise<T>;

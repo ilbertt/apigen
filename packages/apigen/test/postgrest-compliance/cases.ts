@@ -229,6 +229,43 @@ export const CASES: DiffCase[] = [
     headers: { prefer: 'return=representation' },
   },
 
+  // upsert via POST: on_conflict target + Prefer: resolution (products: WIDGET, GADGET)
+  {
+    name: 'upsert merge existing (representation)',
+    method: 'POST',
+    path: '/products?on_conflict=sku',
+    headers: { prefer: 'resolution=merge-duplicates,return=representation' },
+    body: { sku: 'WIDGET', name: 'Widget v2', price: 30, stock: 5 },
+  },
+  {
+    name: 'upsert merge new (minimal)',
+    method: 'POST',
+    path: '/products?on_conflict=sku',
+    headers: { prefer: 'resolution=merge-duplicates' },
+    body: { sku: 'GROMMET', name: 'Grommet', price: 8, stock: 3 },
+  },
+  {
+    name: 'upsert ignore existing (representation is empty)',
+    method: 'POST',
+    path: '/products?on_conflict=sku',
+    headers: { prefer: 'resolution=ignore-duplicates,return=representation' },
+    body: { sku: 'GADGET', name: 'IGNORED', price: 99, stock: 99 },
+  },
+  {
+    name: 'upsert ignore new (representation)',
+    method: 'POST',
+    path: '/products?on_conflict=sku',
+    headers: { prefer: 'resolution=ignore-duplicates,return=representation' },
+    body: { sku: 'SPROCKET', name: 'Sprocket', price: 12, stock: 7 },
+  },
+  {
+    name: 'upsert default target = PK (representation)',
+    method: 'POST',
+    path: '/products',
+    headers: { prefer: 'resolution=merge-duplicates,return=representation' },
+    body: { sku: 'WIDGET', name: 'Widget PK', price: 26, stock: 9 },
+  },
+
   // singular response
   {
     name: 'singular object',

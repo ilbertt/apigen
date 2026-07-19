@@ -85,7 +85,8 @@ function buildApp({
   return new Apigen({ db, catalog, primaryKeys })
     .use(mount('orders'))
     .use(mount('order_items'))
-    .use(mount('orgs'));
+    .use(mount('orgs'))
+    .use(mount('products'));
 }
 
 async function waitForPostgrest(): Promise<void> {

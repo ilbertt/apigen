@@ -32,3 +32,11 @@ create table order_items (
   qty integer not null default 1,
   price numeric(12, 2) not null default 0
 );
+
+-- Settable natural PK (unlike orders' generated-always id) so upsert/PUT can target it.
+create table products (
+  sku text primary key,
+  name text not null,
+  price numeric(12, 2) not null default 0,
+  stock integer not null default 0
+);
