@@ -204,6 +204,11 @@ export const CASES: DiffCase[] = [
     method: 'GET',
     path: '/orders?select=customer,order_items(qty)&order_items.order=qty.desc&id=eq.1',
   },
+  {
+    name: 'embed spread (flatten to-one parent)',
+    method: 'GET',
+    path: '/order_items?select=sku,...orders(customer,amount)&order=id',
+  },
 
   // aggregates in select (db-aggregates enabled): sum/avg/count/max/min + implicit GROUP BY
   { name: 'aggregate sum', method: 'GET', path: '/orders?select=amount.sum()' },

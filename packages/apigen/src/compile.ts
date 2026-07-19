@@ -343,6 +343,8 @@ export interface EmbedPlan {
   readonly policy: Policy;
   /** `!inner` — the base row is kept only when a matching embed row exists. */
   readonly inner?: boolean;
+  /** `...table` — spread the (to-one) embedded columns flat into the base row. */
+  readonly spread?: boolean;
   /** `<embed>.<param>` modifiers scoped to the embedded relation. */
   readonly filters?: readonly WhereNode[];
   readonly order?: readonly OrderTerm[];
@@ -362,6 +364,15 @@ function embedWhere({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
 /** The `EXISTS (…)` that an `!inner` embed adds to the base WHERE to drop unmatched rows. */
 function embedExists({ embed, base }: { embed: EmbedPlan; base: string }): Sql {
   return sql`exists (select 1 from ${ident(embed.relation)} ${embedWhere({ embed, base })})`;
+}
+
+/** A spread embed flattens its (to-one) columns into the base row as scalar subqueries. */
+function spreadFragments({ embed, base }: { embed: EmbedPlan; base: string }): Sql[] {
+  const where = embedWhere({ embed, base });
+  return embed.select.map(
+    (item) =>
+      sql`(select ${ident(item.column)} from ${ident(embed.relation)} ${where}) as ${ident(outputName(item))}`,
+  );
 }
 
 /** Render an embed as a correlated jsonb subquery aliased to its output key. */
@@ -414,8 +425,14 @@ export function compileSelect({
   const colFrags = items.map((item) =>
     csv ? projectText({ item, columns }) : projectItem({ item, columns }),
   );
-  const embedFrags = csv ? [] : embeds.map((embed) => embedFragment({ embed, base: relation }));
-  const projFrags = [...colFrags, ...embedFrags];
+  // A spread flattens its columns into the base row; a regular embed nests as jsonb.
+  const spreadFrags = csv
+    ? []
+    : embeds.filter((e) => e.spread).flatMap((embed) => spreadFragments({ embed, base: relation }));
+  const embedFrags = csv
+    ? []
+    : embeds.filter((e) => !e.spread).map((embed) => embedFragment({ embed, base: relation }));
+  const projFrags = [...colFrags, ...spreadFrags, ...embedFrags];
   if (projFrags.length === 0) {
     internal('Relation has no visible columns to project');
   }

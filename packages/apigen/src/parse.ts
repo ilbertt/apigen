@@ -104,19 +104,22 @@ function parseAggregate(match: RegExpExecArray): SelectItem {
   };
 }
 
-/** `[alias:]relation[!inner](nested)` — an embedded relation rather than a column. */
-const EMBED_RE = /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?([a-zA-Z_][a-zA-Z0-9_]*)(!inner)?\((.*)\)$/;
+/** `[alias:][...]relation[!inner](nested)` — an embedded relation rather than a column. */
+const EMBED_RE =
+  /^(?:([a-zA-Z_][a-zA-Z0-9_]*):)?(\.\.\.)?([a-zA-Z_][a-zA-Z0-9_]*)(!inner)?\((.*)\)$/;
 
 function parseEmbed(match: RegExpExecArray): EmbedItem {
   const alias = match[1];
-  const relation = assertColumn(match[2] ?? '');
-  const inner = match[3] !== undefined;
+  const spread = match[2] !== undefined;
+  const relation = assertColumn(match[3] ?? '');
+  const inner = match[4] !== undefined;
   // Nested column projection; nested embeds are not yet supported and are ignored.
-  const nested = parseSelect(match[4] ?? '');
+  const nested = parseSelect(match[5] ?? '');
   return {
     relation,
     ...(alias !== undefined && { alias }),
     ...(inner && { inner }),
+    ...(spread && { spread }),
     select: nested.columns,
   };
 }

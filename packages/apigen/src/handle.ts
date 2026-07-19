@@ -423,6 +423,7 @@ async function resolveEmbeds({
       select,
       policy: auth.policy,
       ...(embed.inner && { inner: true }),
+      ...(embed.spread && { spread: true }),
       ...(embed.filters && embed.filters.length > 0 && { filters: embed.filters }),
       ...(embed.order && embed.order.length > 0 && { order: embed.order }),
       ...(embed.limit !== undefined && { limit: embed.limit }),
