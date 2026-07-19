@@ -11,6 +11,7 @@ import type {
   FunctionModule,
   InsertConfig,
   Op,
+  OpenApiOptions,
   PrimaryKeys,
   RelationModule,
   SchemaState,
@@ -111,9 +112,14 @@ export interface ApigenOptions {
   /**
    * Additional exposed schemas beyond the default, each selected per request via
    * `Accept-Profile` (reads) / `Content-Profile` (writes). Mount their relations with
-   * `relation('name').inSchema('<schema>')`. Absent → a single-schema app.
+   * `relation('name', { schema: '<schema>' })`. Absent → a single-schema app.
    */
   schemas?: Record<string, SchemaCatalog>;
+  /**
+   * Provide this (even as `{}`) to expose the OpenAPI document at `GET /openapi`; its
+   * fields override the document's `info` block. Omit it and `/openapi` is not served.
+   */
+  openapi?: OpenApiOptions;
 }
 
 /** Internal per-schema state; `modules` is mutated by `use()` (exposed read-only to the engine). */
@@ -138,10 +144,13 @@ export class Apigen {
   readonly #schemaOrder: readonly string[];
   readonly #multiSchema: boolean;
   readonly #schemas = new Map<string, SchemaSlot>();
+  /** Present only when the caller opted into `/openapi`; `undefined` leaves it unexposed. */
+  readonly #openapi: OpenApiOptions | undefined;
 
   constructor(options: ApigenOptions) {
     this.#adapter = resolveAdapter(options.db);
     this.#functionCatalog = options.functions ?? {};
+    this.#openapi = options.openapi;
     this.#defaultSchema = options.defaultSchema ?? 'public';
     const extra = options.schemas ?? {};
     this.#multiSchema = Object.keys(extra).length > 0;
@@ -191,6 +200,7 @@ export class Apigen {
       schemaOrder: this.#schemaOrder,
       defaultSchema: this.#defaultSchema,
       multiSchema: this.#multiSchema,
+      openapi: this.#openapi,
       functionCatalog: this.#functionCatalog,
       functions: this.#functions,
       adapter: this.#adapter,

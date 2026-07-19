@@ -21,6 +21,7 @@ import {
   type FunctionModule,
   isFilterGroup,
   type Op,
+  type OpenApiOptions,
   type PrimaryKeys,
   type Query,
   type RelationColumns,
@@ -29,6 +30,7 @@ import {
   type WhereNode,
 } from './contract.js';
 import { ApiError, buildResponse, HttpStatus, jsonError } from './http.js';
+import { buildOpenApiDocument } from './openapi.js';
 import { filterColumns, parseRequest } from './parse.js';
 
 const METHOD_OP: Record<string, Op> = {
@@ -1170,12 +1172,44 @@ function resolveSchema({
   return name;
 }
 
+/** apigen serves its OpenAPI document here (PostgREST serves it at `/` — see openapi.ts). */
+const OPENAPI_PATH = '/openapi';
+
+/** `GET /openapi`: the schema's OpenAPI (Swagger 2.0) document, carrying apigen's identity. */
+function handleOpenApi({
+  url,
+  state,
+  schema,
+  multiSchema,
+  openapi,
+}: {
+  url: URL;
+  state: SchemaState;
+  schema: string;
+  multiSchema: boolean;
+  openapi: OpenApiOptions;
+}): Response {
+  const doc = buildOpenApiDocument({
+    state,
+    request: { host: url.host, scheme: url.protocol.replace(/:$/, ''), schema },
+    options: openapi,
+  });
+  const headers: Record<string, string> = {
+    'content-type': 'application/openapi+json; charset=utf-8',
+  };
+  if (multiSchema) {
+    headers['content-profile'] = schema;
+  }
+  return buildResponse({ status: HttpStatus.Ok, body: JSON.stringify(doc), headers });
+}
+
 export async function handleRequest({
   req,
   schemas,
   schemaOrder,
   defaultSchema,
   multiSchema,
+  openapi,
   functionCatalog,
   functions,
   adapter,
@@ -1185,6 +1219,7 @@ export async function handleRequest({
   schemaOrder: readonly string[];
   defaultSchema: string;
   multiSchema: boolean;
+  openapi: OpenApiOptions | undefined;
   functionCatalog: FunctionCatalog;
   functions: ReadonlyMap<string, FunctionModule>;
   adapter: Adapter;
@@ -1223,6 +1258,21 @@ export async function handleRequest({
     // The default schema runs on the connection's own search_path (no change); a
     // non-default one is pinned so unqualified relation names resolve there.
     const searchPath = schema === defaultSchema ? undefined : schema;
+
+    // The OpenAPI document is served here only when the app opted in (`openapi` option),
+    // and unless a relation literally named `openapi` shadows it. HEAD returns the
+    // headers with no body, like every other read.
+    if (
+      openapi !== undefined &&
+      url.pathname === OPENAPI_PATH &&
+      (req.method === 'GET' || req.method === 'HEAD') &&
+      !state.modules.has('openapi')
+    ) {
+      const doc = handleOpenApi({ url, state, schema, multiSchema, openapi });
+      return req.method === 'HEAD'
+        ? new Response(null, { status: doc.status, headers: doc.headers })
+        : doc;
+    }
 
     if (req.method === 'OPTIONS') {
       return handleOptions({ url, modules: state.modules });

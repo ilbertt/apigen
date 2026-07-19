@@ -34,16 +34,17 @@ Docker-free).
 
 ## Coverage
 
-Every row is ✅ (a live differential case guarantees parity), 🚧 (a tracked gap), or ⊘
-(an intentional divergence — see below). The goal is to move every 🚧 to ✅.
+Every row is ✅ (a live differential case guarantees parity — except the one marked
+*hermetic*, noted below) or 🚧 (a tracked gap). The goal is to move every 🚧 to ✅.
 
-One feature is marked ⊘ as a deliberate boundary, not a gap:
-
-- **OpenAPI root document** — PostgREST's `GET /` serves a Swagger document that embeds its
-  own version string (`"version":"12.2.3 (…)"`) and host, so matching it byte-for-byte would
-  mean impersonating a specific PostgREST build — not honest compatibility, and brittle across
-  versions. The schema is already available as the typed generated client, so apigen doesn't
-  serve an OpenAPI description.
+apigen serves its OpenAPI (Swagger 2.0) document at `GET /openapi` when the app opts in via
+the `openapi` option (its `info` block is caller-configurable, and `info.version` is omitted
+by default). It is modeled on PostgREST's
+shape — so PostgREST-aware tooling recognizes it — but is deliberately **not** byte-for-byte
+with PostgREST's `GET /`: that document embeds PostgREST's own version string
+(`"version":"12.2.3 (…)"`), so matching it would mean impersonating a specific PostgREST
+build. That is the one intentional divergence, covered by a hermetic test
+(`test/unit/openapi.test.ts`) rather than the byte-for-byte differential.
 
 | Area | Feature | Status |
 | --- | --- | --- |
@@ -79,4 +80,4 @@ One feature is marked ⊘ as a deliberate boundary, not a gap:
 | Negotiation | CSV output (`Accept: text/csv`) | ✅ |
 | Negotiation | CSV input (`Content-Type: text/csv`) | ✅ |
 | Negotiation | `Accept-Profile`/`Content-Profile` (multi-schema) | ✅ |
-| Negotiation | OpenAPI root document | ⊘ out of scope (see below) |
+| Negotiation | OpenAPI document (`GET /openapi`, apigen identity) | ✅ hermetic (see below) |
