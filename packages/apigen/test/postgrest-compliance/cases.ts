@@ -117,6 +117,22 @@ export const CASES: DiffCase[] = [
     path: '/orders?status=eq.paid&or=(customer.eq.Alice,customer.eq.Bob)&order=id',
   },
 
+  // vertical filtering: rename (alias:col) and cast (col::type) in select, on reads and writes
+  { name: 'select rename', method: 'GET', path: '/orders?select=who:customer,amount&order=id' },
+  { name: 'select cast', method: 'GET', path: '/orders?select=id,amount::text&order=id' },
+  {
+    name: 'select rename + cast',
+    method: 'GET',
+    path: '/orders?select=total:amount::text&order=id',
+  },
+  {
+    name: 'insert representation with select projection',
+    method: 'POST',
+    path: '/orders?select=id,who:customer',
+    headers: { prefer: 'return=representation' },
+    body: { org_id: ACME, customer: 'Dave', amount: 42.0, created_at: '2024-06-01T00:00:00Z' },
+  },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },

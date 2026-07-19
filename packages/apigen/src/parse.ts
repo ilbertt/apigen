@@ -8,6 +8,7 @@ import {
   type OrderTerm,
   type ParsedRequest,
   QUANTIFIABLE_OPS,
+  type SelectItem,
   type WhereNode,
 } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
@@ -38,7 +39,31 @@ function assertColumn(name: string): string {
   return name;
 }
 
-function parseSelect(raw: string | null): readonly string[] | undefined {
+const CAST_RE = /^[a-zA-Z0-9_]+$/;
+
+/** Parse one `select` token: `[alias:]column[::type]`. */
+function parseSelectItem(token: string): SelectItem {
+  let rest = token;
+  let cast: string | undefined;
+  const castAt = rest.indexOf('::');
+  if (castAt !== -1) {
+    cast = rest.slice(castAt + 2);
+    if (!CAST_RE.test(cast)) {
+      badRequest(`Invalid cast type "${cast}" in select`);
+    }
+    rest = rest.slice(0, castAt);
+  }
+  let alias: string | undefined;
+  const aliasAt = rest.indexOf(':');
+  if (aliasAt !== -1) {
+    alias = assertColumn(rest.slice(0, aliasAt));
+    rest = rest.slice(aliasAt + 1);
+  }
+  const column = assertColumn(rest);
+  return { column, ...(alias !== undefined && { alias }), ...(cast !== undefined && { cast }) };
+}
+
+function parseSelect(raw: string | null): readonly SelectItem[] | undefined {
   if (raw === null) {
     return undefined;
   }
@@ -49,7 +74,7 @@ function parseSelect(raw: string | null): readonly string[] | undefined {
   if (tokens.length === 0 || tokens.includes('*')) {
     return undefined;
   }
-  return tokens.map(assertColumn);
+  return tokens.map(parseSelectItem);
 }
 
 function stripQuotes(value: string): string {

@@ -15,6 +15,7 @@ import {
   type ParsedRequest,
   type Query,
   type RelationColumns,
+  type SelectItem,
   type WhereNode,
 } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
@@ -110,18 +111,36 @@ function castValue({ value, pgType }: { value: unknown; pgType: string }): Sql {
   return sql`${bindValue({ value, pgType })}${castSuffix(pgType)}`;
 }
 
-function projection({ cols, columns }: { cols: readonly string[]; columns: RelationColumns }): Sql {
-  if (cols.length === 0) {
+function projectItem({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
+  pgTypeOf({ columns, col: item.column }); // presence check against the catalog
+  const base = ident(item.column);
+  // A plain column projects bare so json_agg labels it by its own name (byte-identical
+  // to before). An alias or cast needs an explicit label to name the JSON key.
+  if (item.alias === undefined && item.cast === undefined) {
+    return base;
+  }
+  const expr = item.cast === undefined ? base : sql`${base}${castSuffix(item.cast)}`;
+  return sql`${expr} as ${ident(item.alias ?? item.column)}`;
+}
+
+function projection({
+  items,
+  columns,
+}: {
+  items: readonly SelectItem[];
+  columns: RelationColumns;
+}): Sql {
+  if (items.length === 0) {
     internal('Relation has no visible columns to project');
   }
-  // Project raw columns and let json_agg/json_build_object render them: numeric keeps
-  // its scale, timestamptz serializes as ISO-8601, int8 as a number — byte-identical
-  // to PostgREST, which renders responses through Postgres' own JSON functions.
-  const frags = cols.map((col) => {
-    pgTypeOf({ columns, col });
-    return ident(col);
-  });
-  return join({ values: frags, separator: ', ' });
+  // Project through Postgres' own JSON rendering (json_agg): numeric keeps its scale,
+  // timestamptz serializes as ISO-8601, int8 as a number — byte-identical to PostgREST.
+  return join({ values: items.map((item) => projectItem({ item, columns })), separator: ', ' });
+}
+
+/** A bare column list (no alias/cast) as select items — for the default "all columns". */
+function toItems(cols: readonly string[]): SelectItem[] {
+  return cols.map((column) => ({ column }));
 }
 
 function quantifiedCondition({
@@ -281,9 +300,9 @@ export function compileSelect({
   allowedColumns: readonly string[];
   count?: boolean;
 }): Query {
-  const cols = parsed.select ?? allowedColumns;
+  const items = parsed.select ?? toItems(allowedColumns);
   const parts: Sql[] = [
-    sql`select ${projection({ cols, columns })} from ${ident(relation)}`,
+    sql`select ${projection({ items, columns })} from ${ident(relation)}`,
     whereClause({ policy, filters: parsed.filters, columns }),
     orderClause({ order: parsed.order, relation }),
   ];
@@ -321,7 +340,7 @@ export function compileInsert({
   rows: readonly Record<string, unknown>[];
   insertColumns: readonly string[];
   policy: Policy;
-  returning: readonly string[];
+  returning: readonly SelectItem[];
 }): CompiledInsert {
   const colList = join({ values: insertColumns.map(ident), separator: ', ' });
   const valueRows = rows.map((row) => {
@@ -336,7 +355,7 @@ export function compileInsert({
   // default is not visible to the predicate here (PLAN's insert shape). Rows that
   // fail the predicate are filtered out; the caller rejects the batch on a count
   // mismatch.
-  const stmt = sql`with _apigen_ins as (insert into ${ident(relation)} (${colList}) select ${colList} from (values ${values}) as v (${colList}) where (${policy.fragment}) returning ${projection({ cols: returning, columns })}) select coalesce(json_agg(_apigen_ins), '[]')::text as body, count(*)::int as page from _apigen_ins`;
+  const stmt = sql`with _apigen_ins as (insert into ${ident(relation)} (${colList}) select ${colList} from (values ${values}) as v (${colList}) where (${policy.fragment}) returning ${projection({ items: returning, columns })}) select coalesce(json_agg(_apigen_ins), '[]')::text as body, count(*)::int as page from _apigen_ins`;
   return { query: toQuery(stmt), rowCount: rows.length };
 }
 
@@ -360,7 +379,7 @@ export function compileUpdate({
   setColumns: readonly string[];
   parsed: ParsedRequest;
   policy: Policy;
-  returning: readonly string[];
+  returning: readonly SelectItem[];
 }): UpdatePlan {
   const assignments = setColumns.map(
     (col) =>
@@ -369,14 +388,20 @@ export function compileUpdate({
   const setClause = join({ values: assignments, separator: ', ' });
   const where = whereClause({ policy, filters: parsed.filters, columns });
   const ctid = raw(quoteIdent(CTID_KEY));
-  const proj = projection({ cols: returning, columns });
+  const proj = projection({ items: returning, columns });
+  // The re-select reads back the projected columns by their OUTPUT name (alias or
+  // column), so an aliased/cast expression is applied once (in RETURNING), not twice.
+  const outputCols = join({
+    values: returning.map((item) => ident(item.alias ?? item.column)),
+    separator: ', ',
+  });
   // Aggregate the body from a subquery that projects only the returning columns —
   // json_agg over a record is compact (like row_to_json), matching PostgREST, and
   // keeps the ctid sentinel (used for WITH CHECK re-verification) out of the JSON.
   // ctids come back as a JSON text array (parsed in the handler) rather than a
   // Postgres text[]: a text[] is returned unparsed when the driver has
   // fetch_types disabled, whereas ::text is always a plain string.
-  const update = sql`with _apigen_upd as (update ${ident(relation)} set ${setClause} ${where} returning ctid as ${ctid}, ${proj}) select coalesce((select json_agg(_apigen_rows) from (select ${proj} from _apigen_upd) _apigen_rows), '[]')::text as body, (select count(*)::int from _apigen_upd) as page, coalesce((select json_agg(${ctid}::text) from _apigen_upd), '[]')::text as ctids`;
+  const update = sql`with _apigen_upd as (update ${ident(relation)} set ${setClause} ${where} returning ctid as ${ctid}, ${proj}) select coalesce((select json_agg(_apigen_rows) from (select ${outputCols} from _apigen_upd) _apigen_rows), '[]')::text as body, (select count(*)::int from _apigen_upd) as page, coalesce((select json_agg(${ctid}::text) from _apigen_upd), '[]')::text as ctids`;
 
   const verify = (ctids: readonly string[]): Query => {
     const tids = join({ values: ctids.map((c) => sql`${c}::tid`), separator: ', ' });
@@ -399,10 +424,10 @@ export function compileDelete({
   columns: RelationColumns;
   parsed: ParsedRequest;
   policy: Policy;
-  returning: readonly string[];
+  returning: readonly SelectItem[];
 }): Query {
   const where = whereClause({ policy, filters: parsed.filters, columns });
-  const stmt = sql`with _apigen_del as (delete from ${ident(relation)} ${where} returning ${projection({ cols: returning, columns })}) select coalesce(json_agg(_apigen_del), '[]')::text as body, count(*)::int as page from _apigen_del`;
+  const stmt = sql`with _apigen_del as (delete from ${ident(relation)} ${where} returning ${projection({ items: returning, columns })}) select coalesce(json_agg(_apigen_del), '[]')::text as body, count(*)::int as page from _apigen_del`;
   return toQuery(stmt);
 }
 

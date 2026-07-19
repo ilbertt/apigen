@@ -123,10 +123,20 @@ export interface OrderTerm {
   readonly nullsFirst?: boolean;
 }
 
+/**
+ * A projected column: the source `column`, optionally renamed (`alias:col`) and/or cast
+ * (`col::type`). A plain column has neither.
+ */
+export interface SelectItem {
+  readonly column: string;
+  readonly alias?: string;
+  readonly cast?: string;
+}
+
 /** PostgREST URL query parsed into structured form (parser → compiler contract). */
 export interface ParsedRequest {
   /** Requested columns; `undefined` means "all visible columns". */
-  readonly select?: readonly string[];
+  readonly select?: readonly SelectItem[];
   /** Top-level conditions, implicitly AND-ed together (a `WhereNode` may be a group). */
   readonly filters: readonly WhereNode[];
   readonly order: readonly OrderTerm[];
