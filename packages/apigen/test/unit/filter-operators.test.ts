@@ -16,7 +16,8 @@ const MIGRATIONS = `
     id integer primary key,
     tags text[] not null default '{}',
     span int4range,
-    data jsonb
+    data jsonb,
+    label text
   );
 `;
 
@@ -28,7 +29,7 @@ const SEED = `
 `;
 
 const CATALOG: Catalog = {
-  things: { id: 'int4', tags: '_text', span: 'int4range', data: 'jsonb' },
+  things: { id: 'int4', tags: '_text', span: 'int4range', data: 'jsonb', label: 'text' },
 };
 
 let db: TestDb;
@@ -76,4 +77,63 @@ test('select: JSON-path projection extracts (->>/->), names by last key, and cas
   // -> keeps json (a quoted string); an alias and a cast rename/retype the output.
   expect(await rows('select=plan:data->tier&order=id&id=eq.1')).toEqual([{ plan: 'gold' }]);
   expect(await rows('select=years:data->>age::int&order=id&id=eq.1')).toEqual([{ years: 30 }]);
+});
+
+// Regression: the write-representation re-select must read columns back by their OUTPUT
+// name (outputName), not the base column. A JSON-path projection is labelled by its last
+// key in RETURNING, so `select=id,data->>tier` re-selects `"tier"` — reading back "data"
+// used to raise `column "data" does not exist` (400) on PATCH / upsert / missing=default.
+// The JSON path is read off the pre-seeded jsonb (rows 1-3 have tier gold/silver/gold).
+test('write representation projects a JSON path in select', async () => {
+  const wapp = new Apigen({ db: db.sql, catalog: CATALOG }).use(
+    relation('things').select({}).insert({}).update({}),
+  );
+  const write = ({
+    method,
+    path,
+    body,
+    prefer,
+  }: {
+    method: string;
+    path: string;
+    body: unknown;
+    prefer: string;
+  }): Promise<Response> =>
+    wapp.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: { 'content-type': 'application/json', prefer },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  // PATCH → compileUpdate re-select
+  const patched = await write({
+    method: 'PATCH',
+    path: '/things?id=eq.1&select=id,data->>tier',
+    body: { label: 'updated' },
+    prefer: 'return=representation',
+  });
+  expect(patched.status).toBe(200);
+  expect(await patched.json()).toEqual([{ id: 1, tier: 'gold' }]);
+
+  // POST upsert (existing id → UPDATE branch) → compileInsert(conflict) re-select
+  const upserted = await write({
+    method: 'POST',
+    path: '/things?on_conflict=id&select=id,data->>tier',
+    body: { id: 2, label: 'merged' },
+    prefer: 'resolution=merge-duplicates,return=representation',
+  });
+  expect(upserted.status).toBe(200);
+  expect(await upserted.json()).toEqual([{ id: 2, tier: 'silver' }]);
+
+  // POST missing=default (new row, data omitted → default null) → missingDefault re-select
+  const inserted = await write({
+    method: 'POST',
+    path: '/things?select=id,data->>tier',
+    body: { id: 4, label: 'fresh' },
+    prefer: 'missing=default,return=representation',
+  });
+  expect(inserted.status).toBe(201);
+  expect(await inserted.json()).toEqual([{ id: 4, tier: null }]);
 });

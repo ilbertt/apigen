@@ -546,7 +546,7 @@ export function compileInsert({
     // DEFAULT isn't allowed inside INSERT…SELECT VALUES, so insert directly and enforce
     // WITH CHECK by re-verifying the inserted rows' ctids (as update does).
     const outputCols = join({
-      values: returning.map((item) => ident(item.alias ?? item.column)),
+      values: returning.map((item) => ident(outputName(item))),
       separator: ', ',
     });
     const ctid = raw(quoteIdent(CTID_KEY));
@@ -573,7 +573,7 @@ export function compileInsert({
   // INSERTED. `xmax <> 0` distinguishes the two per row; the sentinel is kept out of the
   // body via a re-select over the output columns (like update's ctid handling).
   const outputCols = join({
-    values: returning.map((item) => ident(item.alias ?? item.column)),
+    values: returning.map((item) => ident(outputName(item))),
     separator: ', ',
   });
   const stmt = sql`with _apigen_ins as (${head} ${onConflictClause({ conflict, insertColumns })} returning (xmax::text::int8 <> 0) as _apigen_updated, ${proj}) select coalesce((select json_agg(_apigen_rows) from (select ${outputCols} from _apigen_ins) _apigen_rows), '[]')::text as body, (select count(*)::int from _apigen_ins) as page, coalesce((select bool_or(_apigen_updated)::int from _apigen_ins), 0) as updated`;
@@ -610,10 +610,11 @@ export function compileUpdate({
   const where = whereClause({ policy, filters: parsed.filters, columns });
   const ctid = raw(quoteIdent(CTID_KEY));
   const proj = projection({ items: returning, columns });
-  // The re-select reads back the projected columns by their OUTPUT name (alias or
-  // column), so an aliased/cast expression is applied once (in RETURNING), not twice.
+  // The re-select reads back the projected columns by their OUTPUT name (alias, JSON-path
+  // last key, or column — the same label RETURNING assigned), so an aliased/cast/JSON-path
+  // expression is applied once (in RETURNING), not twice.
   const outputCols = join({
-    values: returning.map((item) => ident(item.alias ?? item.column)),
+    values: returning.map((item) => ident(outputName(item))),
     separator: ', ',
   });
   // Aggregate the body from a subquery that projects only the returning columns —
