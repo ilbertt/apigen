@@ -231,6 +231,71 @@ async function readBody(req: Request): Promise<unknown> {
   }
 }
 
+function isCsvBody(req: Request): boolean {
+  return (req.headers.get('content-type') ?? '').includes('text/csv');
+}
+
+/** Split CSV text into records (rows of fields), honoring RFC-4180 quotes and CRLF/LF. */
+function csvRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let record: string[] = [];
+  let field = '';
+  let quoted = false;
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        field += '"';
+        i += 2;
+      } else if (c === '"') {
+        quoted = false;
+        i += 1;
+      } else {
+        field += c;
+        i += 1;
+      }
+      continue;
+    }
+    if (c === '"') {
+      quoted = true;
+      i += 1;
+    } else if (c === ',') {
+      record.push(field);
+      field = '';
+      i += 1;
+    } else if (c === '\n' || c === '\r') {
+      record.push(field);
+      records.push(record);
+      record = [];
+      field = '';
+      i += c === '\r' && text[i + 1] === '\n' ? 2 : 1;
+    } else {
+      field += c;
+      i += 1;
+    }
+  }
+  if (field !== '' || record.length > 0) {
+    record.push(field);
+    records.push(record);
+  }
+  return records;
+}
+
+/** Parse a CSV insert body: the header names the columns, each later row is one insert. */
+function parseCsv(text: string): Row[] {
+  const [header, ...rows] = csvRecords(text);
+  if (header === undefined) {
+    badRequest('CSV body must have a header row');
+  }
+  return rows.map((cells) =>
+    Object.fromEntries(
+      // biome-ignore lint/complexity/useMaxParams: native Array.map (value, index) callback.
+      header.map((name, i) => [name, cells[i] ?? null]),
+    ),
+  );
+}
+
 /** A function call's args: a JSON object of `arg → value`. An empty body means no args. */
 async function readFunctionArgs(req: Request): Promise<Row> {
   const text = await req.text();
@@ -638,8 +703,15 @@ async function handleInsert({
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'insert', module, columns });
-  const body = await readBody(req);
-  const rows = (Array.isArray(body) ? body : [body]) as Row[];
+  // A text/csv body inserts one row per data line, keyed by the header; JSON is one
+  // object or an array of them.
+  let rows: Row[];
+  if (isCsvBody(req)) {
+    rows = parseCsv(await req.text());
+  } else {
+    const body = await readBody(req);
+    rows = (Array.isArray(body) ? body : [body]) as Row[];
+  }
   if (rows.length === 0) {
     badRequest('Insert body must contain at least one row');
   }

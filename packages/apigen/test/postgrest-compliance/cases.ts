@@ -11,6 +11,8 @@ export interface DiffCase {
   readonly path: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: unknown;
+  /** A raw (unstringified) request body, e.g. CSV text. Takes precedence over `body`. */
+  readonly rawBody?: string;
 }
 
 const ACME = '11111111-1111-1111-1111-111111111111';
@@ -332,6 +334,15 @@ export const CASES: DiffCase[] = [
     headers: { prefer: 'return=headers-only' },
     body: { status: 'shipped' },
   },
+  // CSV insert: the header names the columns; unlisted columns take DB defaults
+  {
+    name: 'csv insert (representation)',
+    method: 'POST',
+    path: '/orders?select=customer,amount,status',
+    headers: { 'content-type': 'text/csv', prefer: 'return=representation' },
+    rawBody: `customer,amount,org_id\nDave,42,${ACME}\n"Eve, Jr",7,${ACME}`,
+  },
+
   { name: 'delete default (minimal)', method: 'DELETE', path: '/orders?customer=eq.Bob' },
   {
     name: 'delete representation',
