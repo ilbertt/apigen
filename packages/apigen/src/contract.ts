@@ -162,6 +162,11 @@ export interface EmbedItem {
   readonly select?: readonly SelectItem[];
   /** `!inner` — an inner join: base rows without a matching embed are dropped. */
   readonly inner?: boolean;
+  /** Modifiers scoped to this embed via `<embed>.<param>` (filters/order/limit/offset). */
+  readonly filters?: readonly WhereNode[];
+  readonly order?: readonly OrderTerm[];
+  readonly limit?: number;
+  readonly offset?: number;
 }
 
 /** PostgREST URL query parsed into structured form (parser → compiler contract). */

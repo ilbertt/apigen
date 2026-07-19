@@ -75,6 +75,15 @@ test('!inner drops base rows that have no matching embed (Grace has no books)', 
   ]);
 });
 
+test('embedded filter/order/limit scope the nested query', async () => {
+  expect(await json('/authors?select=name,books(title)&books.title=eq.Notes&id=eq.1')).toEqual([
+    { name: 'Ada', books: [{ title: 'Notes' }] },
+  ]);
+  expect(
+    await json('/authors?select=name,books(title)&books.order=title.asc&books.limit=1&id=eq.1'),
+  ).toEqual([{ name: 'Ada', books: [{ title: 'Essays' }] }]);
+});
+
 test('embedding an unexposed or unrelated relation is a 400', async () => {
   const notExposed = await app.handle(new Request('http://localhost/authors?select=id,nope(x)'));
   expect(notExposed.status).toBe(400);

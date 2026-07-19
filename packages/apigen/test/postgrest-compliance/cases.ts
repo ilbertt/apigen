@@ -189,6 +189,21 @@ export const CASES: DiffCase[] = [
     path: '/orders?select=id,order_items!inner(sku)&order=id',
     headers: { prefer: 'count=exact' },
   },
+  {
+    name: 'embedded filter',
+    method: 'GET',
+    path: '/orders?select=customer,order_items(sku,qty)&order_items.qty=gt.1&id=eq.1',
+  },
+  {
+    name: 'embedded order + limit',
+    method: 'GET',
+    path: '/orders?select=customer,order_items(sku)&order_items.order=sku.asc&order_items.limit=1&id=eq.1',
+  },
+  {
+    name: 'embedded order desc',
+    method: 'GET',
+    path: '/orders?select=customer,order_items(qty)&order_items.order=qty.desc&id=eq.1',
+  },
 
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
