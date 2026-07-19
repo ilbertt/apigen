@@ -240,6 +240,20 @@ export const CASES: DiffCase[] = [
   },
   { name: 'options', method: 'OPTIONS', path: '/orders' },
 
+  // CSV output: header row + text values, null → empty, no trailing newline
+  {
+    name: 'csv output',
+    method: 'GET',
+    path: '/orders?select=id,customer,amount,note&order=id',
+    headers: { accept: 'text/csv' },
+  },
+  {
+    name: 'csv with count',
+    method: 'GET',
+    path: '/orders?select=id,customer&order=id',
+    headers: { accept: 'text/csv', prefer: 'count=exact' },
+  },
+
   // Range header pagination (an alternative to limit/offset)
   {
     name: 'range items 0-1',
