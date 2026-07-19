@@ -139,6 +139,22 @@ export const CASES: DiffCase[] = [
   { name: 'limit + offset', method: 'GET', path: '/orders?order=id&limit=2&offset=1' },
   { name: 'empty result', method: 'GET', path: '/orders?customer=eq.Nobody' },
 
+  // Range header pagination (an alternative to limit/offset)
+  {
+    name: 'range items 0-1',
+    method: 'GET',
+    path: '/orders?order=id',
+    headers: { range: '0-1', 'range-unit': 'items' },
+  },
+  { name: 'range items 1-2', method: 'GET', path: '/orders?order=id', headers: { range: '1-2' } },
+  { name: 'range open-ended', method: 'GET', path: '/orders?order=id', headers: { range: '2-' } },
+  {
+    name: 'range with count exact',
+    method: 'GET',
+    path: '/orders?order=id',
+    headers: { range: '0-1', prefer: 'count=exact' },
+  },
+
   // counting: Content-Range with Prefer: count=exact
   {
     name: 'count exact',

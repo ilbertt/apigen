@@ -74,6 +74,34 @@ function wantsSingular(req: Request): boolean {
   return (req.headers.get('accept') ?? '').includes(SINGULAR_MEDIA);
 }
 
+const RANGE_RE = /^(\d+)-(\d*)$/;
+
+/**
+ * PostgREST `Range: <from>-<to>` items pagination — an alternative to `limit`/`offset`.
+ * `0-9` → offset 0, limit 10; `10-` → offset 10, no limit. A non-`items` `Range-Unit`
+ * is ignored (not a row range).
+ */
+function parseRange(req: Request): { offset: number; limit?: number } | undefined {
+  const range = req.headers.get('range');
+  if (range === null) {
+    return undefined;
+  }
+  const unit = req.headers.get('range-unit');
+  if (unit !== null && unit !== 'items') {
+    return undefined;
+  }
+  const match = RANGE_RE.exec(range.trim());
+  if (match === null) {
+    badRequest(`Invalid Range header "${range}"`);
+  }
+  const from = Number(match[1]);
+  const to = match[2] ? Number(match[2]) : undefined;
+  if (to !== undefined && to < from) {
+    badRequest(`Invalid Range header "${range}": end is before start`);
+  }
+  return to === undefined ? { offset: from } : { offset: from, limit: to - from + 1 };
+}
+
 function rowRange({ offset, page }: { offset: number; page: number }): string {
   return page > 0 ? `${offset}-${offset + page - 1}` : '*';
 }
@@ -275,16 +303,24 @@ async function handleSelect({
   const prefs = parsePreferences(req);
   const singular = wantsSingular(req);
 
+  // A `Range` header supplies offset/limit only when the query string didn't — the
+  // `limit`/`offset` params take precedence over the legacy header.
+  const range = parseRange(req);
+  const paged =
+    range !== undefined && parsed.limit === undefined && parsed.offset === undefined
+      ? { ...parsed, offset: range.offset, limit: range.limit }
+      : parsed;
+
   const query = compileSelect({
     relation,
     columns,
-    parsed,
+    parsed: paged,
     policy: auth.policy,
     allowedColumns: auth.allowedColumns,
     count: prefs.count,
   });
   const result = await runOne({ adapter, query });
-  const offset = parsed.offset ?? 0;
+  const offset = paged.offset ?? 0;
   const total = prefs.count ? (result.total ?? 0) : null;
   const headers: Record<string, string> = {};
   if (prefs.count) {
