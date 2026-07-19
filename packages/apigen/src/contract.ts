@@ -273,7 +273,22 @@ export type AnyOperationConfig = OperationConfig<AnyAuthFn>;
 /** A mounted relation: its name plus the per-op configuration registered on it. */
 export interface RelationModule {
   readonly name: string;
+  /** The schema this relation belongs to; omitted means the default schema. */
+  readonly schema?: string;
   readonly handlers: Readonly<Partial<Record<Op, AnyOperationConfig>>>;
+}
+
+/**
+ * Everything the engine needs to serve one schema: its generated catalog/keys and
+ * the relation modules mounted under it. A single-schema app has exactly one of these
+ * (the default schema); multi-schema apps have one per exposed schema, selected per
+ * request via `Accept-Profile` (reads) / `Content-Profile` (writes).
+ */
+export interface SchemaState {
+  readonly catalog: Catalog;
+  readonly primaryKeys: PrimaryKeys;
+  readonly foreignKeys: ForeignKeys;
+  readonly modules: ReadonlyMap<string, RelationModule>;
 }
 
 /**

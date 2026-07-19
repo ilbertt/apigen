@@ -12,3 +12,8 @@ grant anon to authenticator;
 grant usage on schema public to anon;
 grant select, insert, update, delete on all tables in schema public to anon;
 grant usage, select on all sequences in schema public to anon;
+
+-- The second exposed schema, reachable via Accept-Profile/Content-Profile.
+grant usage on schema inventory to anon;
+grant select, insert, update, delete on all tables in schema inventory to anon;
+grant usage, select on all sequences in schema inventory to anon;

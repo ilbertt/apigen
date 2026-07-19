@@ -47,6 +47,7 @@ const HEADER_KEYS = [
   'location',
   'preference-applied',
   'allow',
+  'content-profile',
 ];
 
 interface Snapshot {
@@ -68,8 +69,8 @@ let seedSql: string;
  * introspection and removes any hand-written catalog that could drift as the schema
  * grows to cover more PostgREST features.
  */
-async function introspectCatalog(db: Sql): Promise<Catalog> {
-  const introspection = await introspect((text) => db.unsafe(text));
+async function introspectCatalog({ db, schema }: { db: Sql; schema?: string }): Promise<Catalog> {
+  const introspection = await introspect({ run: (text: string) => db.unsafe(text), schema });
   const catalog: Catalog = {};
   for (const [name, columns] of Object.entries(introspection)) {
     catalog[name] = Object.fromEntries(columns.map((c) => [c.name, c.pgType]));
@@ -77,23 +78,35 @@ async function introspectCatalog(db: Sql): Promise<Catalog> {
   return catalog;
 }
 
-function buildApp({
-  db,
-  catalog,
-  primaryKeys,
-  foreignKeys,
-}: {
-  db: Sql;
+/** The generated catalog + keys for one schema — the shape apigen's `schemas` option takes. */
+interface SchemaBundle {
   catalog: Catalog;
   primaryKeys: PrimaryKeys;
   foreignKeys: ForeignKeys;
+}
+
+function buildApp({
+  db,
+  publicSchema,
+  inventory,
+}: {
+  db: Sql;
+  publicSchema: SchemaBundle;
+  inventory: SchemaBundle;
 }): Apigen {
-  const mount = (name: string) => relation(name).select({}).insert({}).update({}).delete({});
-  return new Apigen({ db, catalog, primaryKeys, foreignKeys })
-    .use(mount('orders'))
-    .use(mount('order_items'))
-    .use(mount('orgs'))
-    .use(mount('products'));
+  return new Apigen({
+    db,
+    catalog: publicSchema.catalog,
+    primaryKeys: publicSchema.primaryKeys,
+    foreignKeys: publicSchema.foreignKeys,
+    // `inventory` is reachable only via Accept-Profile/Content-Profile: inventory.
+    schemas: { inventory },
+  })
+    .use(relation('orders').select({}).insert({}).update({}).delete({}))
+    .use(relation('order_items').select({}).insert({}).update({}).delete({}))
+    .use(relation('orgs').select({}).insert({}).update({}).delete({}))
+    .use(relation('products').select({}).insert({}).update({}).delete({}))
+    .use(relation('widgets', { schema: 'inventory' }).select({}).insert({}).update({}).delete({}));
 }
 
 async function waitForPostgrest(): Promise<void> {
@@ -156,9 +169,17 @@ describe('PostgREST compliance', () => {
     sql = conn.sql;
     endDb = conn.end;
     const run = (text: string) => sql.unsafe(text);
-    const primaryKeys: PrimaryKeys = await introspectPrimaryKeys(run);
-    const foreignKeys: ForeignKeys = await introspectForeignKeys(run);
-    app = buildApp({ db: sql, catalog: await introspectCatalog(sql), primaryKeys, foreignKeys });
+    const publicSchema: SchemaBundle = {
+      catalog: await introspectCatalog({ db: sql }),
+      primaryKeys: await introspectPrimaryKeys({ run }),
+      foreignKeys: await introspectForeignKeys({ run }),
+    };
+    const inventory: SchemaBundle = {
+      catalog: await introspectCatalog({ db: sql, schema: 'inventory' }),
+      primaryKeys: await introspectPrimaryKeys({ run, schema: 'inventory' }),
+      foreignKeys: await introspectForeignKeys({ run, schema: 'inventory' }),
+    };
+    app = buildApp({ db: sql, publicSchema, inventory });
     await waitForPostgrest();
   }, STACK_UP_TIMEOUT_MS);
 

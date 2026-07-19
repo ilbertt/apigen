@@ -1,9 +1,9 @@
 /**
  * Request specs for PostgREST compliance. Each case is fired at both a real
  * PostgREST and at apigen in-process (see compliance.test.ts) and asserted to match
- * byte-for-byte. Every case is a behavior apigen guarantees to match; the few intentional
- * divergences (OpenAPI generation, multi-schema Accept-Profile, up-front allowedColumns)
- * are out of scope — documented in the README, not parked here as skipped tests.
+ * byte-for-byte. Every case is a behavior apigen guarantees to match; the remaining
+ * intentional divergences (OpenAPI generation, up-front allowedColumns) are out of scope —
+ * documented in the README, not parked here as skipped tests.
  */
 export interface DiffCase {
   readonly name: string;
@@ -445,5 +445,59 @@ export const CASES: DiffCase[] = [
     method: 'GET',
     path: '/orders?id=eq.1',
     headers: { accept: 'application/vnd.pgrst.object+json' },
+  },
+
+  // multi-schema: `widgets` lives only in the `inventory` schema, reached per request via
+  // Accept-Profile (reads) / Content-Profile (writes). Every response echoes Content-Profile.
+  {
+    name: 'schema read via Accept-Profile',
+    method: 'GET',
+    path: '/widgets?order=id',
+    headers: { 'accept-profile': 'inventory' },
+  },
+  {
+    name: 'schema read HEAD via Accept-Profile',
+    method: 'HEAD',
+    path: '/widgets?order=id',
+    headers: { 'accept-profile': 'inventory' },
+  },
+  {
+    name: 'schema filter in non-default schema',
+    method: 'GET',
+    path: '/widgets?qty=gt.5&order=id',
+    headers: { 'accept-profile': 'inventory' },
+  },
+  {
+    name: 'schema write via Content-Profile (representation)',
+    method: 'POST',
+    path: '/widgets?select=id,label,qty',
+    headers: { 'content-profile': 'inventory', prefer: 'return=representation' },
+    body: { id: 10, label: 'Sprocket', qty: 4 },
+  },
+  {
+    name: 'schema write via Content-Profile (minimal → no Content-Profile)',
+    method: 'POST',
+    path: '/widgets',
+    headers: { 'content-profile': 'inventory' },
+    body: { id: 11, label: 'Cog', qty: 1 },
+  },
+  {
+    name: 'schema update via Content-Profile',
+    method: 'PATCH',
+    path: '/widgets?id=eq.1',
+    headers: { 'content-profile': 'inventory', prefer: 'return=representation' },
+    body: { qty: 99 },
+  },
+  {
+    name: 'schema delete via Content-Profile (minimal → 204)',
+    method: 'DELETE',
+    path: '/widgets?id=eq.2',
+    headers: { 'content-profile': 'inventory' },
+  },
+  {
+    name: 'unknown schema profile → 406 PGRST106',
+    method: 'GET',
+    path: '/orders?order=id',
+    headers: { 'accept-profile': 'nope' },
   },
 ];

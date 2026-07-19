@@ -32,7 +32,8 @@ services:
     image: postgrest/postgrest:v12.2.3
     environment:
       PGRST_DB_URI: postgres://authenticator:authenticator_pw@postgres:5432/postgres
-      PGRST_DB_SCHEMAS: public
+      # First schema is the default (used when no Accept-Profile/Content-Profile).
+      PGRST_DB_SCHEMAS: public,inventory
       PGRST_DB_ANON_ROLE: anon
       PGRST_DB_AGGREGATES_ENABLED: "true"
       PGRST_SERVER_PORT: 3000

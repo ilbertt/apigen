@@ -1,4 +1,5 @@
 import { type Authorization, authorize } from './authorize.js';
+import { quoteIdent } from './builder/index.js';
 import {
   type ConflictTarget,
   compileDelete,
@@ -21,8 +22,10 @@ import {
   isFilterGroup,
   type Op,
   type PrimaryKeys,
+  type Query,
   type RelationColumns,
   type RelationModule,
+  type SchemaState,
   type WhereNode,
 } from './contract.js';
 import { ApiError, buildResponse, HttpStatus, jsonError } from './http.js';
@@ -335,11 +338,43 @@ function ensureArgs({
   }
 }
 
+/**
+ * `SET LOCAL search_path` pinning unqualified names to a non-default schema, keeping
+ * `public` on the path for shared types/functions. The name is a validated, configured
+ * schema (never arbitrary input) and is quoted as an identifier.
+ */
+function setSearchPath(schema: string): Query {
+  return { text: `set local search_path to ${quoteIdent(schema)}, "public"`, values: [] };
+}
+
+/** Run `fn` in a transaction, first pinning `search_path` when a non-default schema was selected. */
+function transactWith<T>({
+  adapter,
+  searchPath,
+  fn,
+}: {
+  adapter: Adapter;
+  searchPath: string | undefined;
+  fn: (tx: Adapter) => Promise<T>;
+}): Promise<T> {
+  return adapter.transaction(async (tx) => {
+    if (searchPath !== undefined) {
+      await tx.execute(setSearchPath(searchPath));
+    }
+    return fn(tx);
+  });
+}
+
 async function runOne(args: {
   adapter: Adapter;
-  query: { text: string; values: unknown[] };
+  query: Query;
+  searchPath: string | undefined;
 }): Promise<Rendered> {
-  const rows = await args.adapter.transaction((tx) => tx.execute(args.query));
+  const rows = await transactWith({
+    adapter: args.adapter,
+    searchPath: args.searchPath,
+    fn: (tx) => tx.execute(args.query),
+  });
   return rows[0] as Rendered;
 }
 
@@ -524,6 +559,7 @@ async function handleSelect({
   catalog,
   modules,
   foreignKeys,
+  searchPath,
 }: {
   req: Request;
   url: URL;
@@ -534,6 +570,7 @@ async function handleSelect({
   catalog: Catalog;
   modules: ReadonlyMap<string, RelationModule>;
   foreignKeys: ForeignKeys;
+  searchPath: string | undefined;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'select', module, columns });
@@ -577,7 +614,7 @@ async function handleSelect({
     embeds,
     csv,
   });
-  const result = await runOne({ adapter, query });
+  const result = await runOne({ adapter, query, searchPath });
   const offset = paged.offset ?? 0;
   const total = prefs.count ? (result.total ?? 0) : null;
   const headers: Record<string, string> = {};
@@ -697,6 +734,7 @@ async function handleInsert({
   module,
   adapter,
   primaryKeys,
+  searchPath,
 }: {
   req: Request;
   url: URL;
@@ -705,6 +743,7 @@ async function handleInsert({
   module: RelationModule;
   adapter: Adapter;
   primaryKeys: PrimaryKeys;
+  searchPath: string | undefined;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'insert', module, columns });
@@ -762,27 +801,31 @@ async function handleInsert({
     conflict,
     missingDefault: prefs.missing === 'default',
   });
-  const result = await adapter.transaction(async (tx) => {
-    const rendered = (await tx.execute(query))[0] as Rendered;
-    // ignore-duplicates legitimately drops conflicting rows, so a short count isn't a
-    // policy violation; every other write must return every requested row.
-    if (conflict?.action !== 'ignore' && rendered.page !== rowCount) {
-      throw new ApiError({
-        status: HttpStatus.Forbidden,
-        message: `Insert into "${relation}" violates the WITH CHECK policy`,
-      });
-    }
-    // missing=default inserts before checking, so re-verify WITH CHECK on the new rows.
-    if (verify !== undefined) {
-      const ctids = rendered.ctids ? (JSON.parse(rendered.ctids) as string[]) : [];
-      if (ctids.length > 0 && (await tx.execute(verify(ctids))).length > 0) {
+  const result = await transactWith({
+    adapter,
+    searchPath,
+    fn: async (tx) => {
+      const rendered = (await tx.execute(query))[0] as Rendered;
+      // ignore-duplicates legitimately drops conflicting rows, so a short count isn't a
+      // policy violation; every other write must return every requested row.
+      if (conflict?.action !== 'ignore' && rendered.page !== rowCount) {
         throw new ApiError({
           status: HttpStatus.Forbidden,
           message: `Insert into "${relation}" violates the WITH CHECK policy`,
         });
       }
-    }
-    return rendered;
+      // missing=default inserts before checking, so re-verify WITH CHECK on the new rows.
+      if (verify !== undefined) {
+        const ctids = rendered.ctids ? (JSON.parse(rendered.ctids) as string[]) : [];
+        if (ctids.length > 0 && (await tx.execute(verify(ctids))).length > 0) {
+          throw new ApiError({
+            status: HttpStatus.Forbidden,
+            message: `Insert into "${relation}" violates the WITH CHECK policy`,
+          });
+        }
+      }
+      return rendered;
+    },
   });
   const inserted = wantLocation ? (JSON.parse(result.body) as Row[])[0] : undefined;
   const location =
@@ -829,6 +872,7 @@ async function handlePut({
   module,
   adapter,
   primaryKeys,
+  searchPath,
 }: {
   req: Request;
   url: URL;
@@ -837,6 +881,7 @@ async function handlePut({
   module: RelationModule;
   adapter: Adapter;
   primaryKeys: PrimaryKeys;
+  searchPath: string | undefined;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const pk = primaryKeys[relation] ?? [];
@@ -877,15 +922,19 @@ async function handlePut({
     returning,
     conflict: { columns: pk, action: 'merge' },
   });
-  const result = await adapter.transaction(async (tx) => {
-    const rendered = (await tx.execute(query))[0] as Rendered;
-    if (rendered.page !== rowCount) {
-      throw new ApiError({
-        status: HttpStatus.Forbidden,
-        message: `PUT on "${relation}" violates the WITH CHECK policy`,
-      });
-    }
-    return rendered;
+  const result = await transactWith({
+    adapter,
+    searchPath,
+    fn: async (tx) => {
+      const rendered = (await tx.execute(query))[0] as Rendered;
+      if (rendered.page !== rowCount) {
+        throw new ApiError({
+          status: HttpStatus.Forbidden,
+          message: `PUT on "${relation}" violates the WITH CHECK policy`,
+        });
+      }
+      return rendered;
+    },
   });
   // PUT emits no Content-Range. Without a representation the answer is always 204; with
   // one it is 200 when a row was updated, 201 when inserted.
@@ -910,6 +959,7 @@ async function handleUpdate({
   columns,
   module,
   adapter,
+  searchPath,
 }: {
   req: Request;
   url: URL;
@@ -917,6 +967,7 @@ async function handleUpdate({
   columns: RelationColumns;
   module: RelationModule;
   adapter: Adapter;
+  searchPath: string | undefined;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'update', module, columns });
@@ -944,19 +995,23 @@ async function handleUpdate({
     policy: auth.policy,
     returning,
   });
-  const result = await adapter.transaction(async (tx) => {
-    const rendered = (await tx.execute(plan.update))[0] as Rendered;
-    const ctids = rendered.ctids ? (JSON.parse(rendered.ctids) as string[]) : [];
-    if (ctids.length > 0) {
-      const violations = await tx.execute(plan.verify(ctids));
-      if (violations.length > 0) {
-        throw new ApiError({
-          status: HttpStatus.Forbidden,
-          message: `Update on "${relation}" violates the WITH CHECK policy`,
-        });
+  const result = await transactWith({
+    adapter,
+    searchPath,
+    fn: async (tx) => {
+      const rendered = (await tx.execute(plan.update))[0] as Rendered;
+      const ctids = rendered.ctids ? (JSON.parse(rendered.ctids) as string[]) : [];
+      if (ctids.length > 0) {
+        const violations = await tx.execute(plan.verify(ctids));
+        if (violations.length > 0) {
+          throw new ApiError({
+            status: HttpStatus.Forbidden,
+            message: `Update on "${relation}" violates the WITH CHECK policy`,
+          });
+        }
       }
-    }
-    return rendered;
+      return rendered;
+    },
   });
   return writeResponse({
     prefs,
@@ -974,6 +1029,7 @@ async function handleDelete({
   columns,
   module,
   adapter,
+  searchPath,
 }: {
   req: Request;
   url: URL;
@@ -981,6 +1037,7 @@ async function handleDelete({
   columns: RelationColumns;
   module: RelationModule;
   adapter: Adapter;
+  searchPath: string | undefined;
 }): Promise<Response> {
   const parsed = parseRequest(url);
   const auth = await authorize({ req, op: 'delete', module, columns });
@@ -996,7 +1053,7 @@ async function handleDelete({
     policy: auth.policy,
     returning,
   });
-  const result = await runOne({ adapter, query });
+  const result = await runOne({ adapter, query, searchPath });
   // PostgREST reports no row range for deletes.
   return writeResponse({
     prefs,
@@ -1082,22 +1139,53 @@ function handleOptions({
   });
 }
 
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * Resolve the target schema from the request's profile header, matching PostgREST:
+ * reads (and OPTIONS) honor `Accept-Profile`, writes honor `Content-Profile`, and an
+ * absent header selects the default (first exposed) schema. A named-but-unknown schema
+ * is a 406 `PGRST106` listing the exposed schemas in db-schemas order.
+ */
+function resolveSchema({
+  requested,
+  order,
+  known,
+}: {
+  requested: string | null;
+  order: readonly string[];
+  known: ReadonlyMap<string, unknown>;
+}): string {
+  const name = requested?.trim();
+  if (name === undefined || name === '') {
+    return order[0] ?? 'public';
+  }
+  if (!known.has(name)) {
+    throw new ApiError({
+      status: HttpStatus.NotAcceptable,
+      code: 'PGRST106',
+      message: `The schema must be one of the following: ${order.join(', ')}`,
+    });
+  }
+  return name;
+}
+
 export async function handleRequest({
   req,
-  catalog,
-  primaryKeys,
-  foreignKeys,
+  schemas,
+  schemaOrder,
+  defaultSchema,
+  multiSchema,
   functionCatalog,
-  modules,
   functions,
   adapter,
 }: {
   req: Request;
-  catalog: Catalog;
-  primaryKeys: PrimaryKeys;
-  foreignKeys: ForeignKeys;
+  schemas: ReadonlyMap<string, SchemaState>;
+  schemaOrder: readonly string[];
+  defaultSchema: string;
+  multiSchema: boolean;
   functionCatalog: FunctionCatalog;
-  modules: ReadonlyMap<string, RelationModule>;
   functions: ReadonlyMap<string, FunctionModule>;
   adapter: Adapter;
 }): Promise<Response> {
@@ -1117,8 +1205,27 @@ export async function handleRequest({
       });
     }
 
+    // Single-schema apps ignore profile headers entirely (byte-for-byte with a
+    // single-schema PostgREST); multi-schema apps select and validate per request.
+    const schema = multiSchema
+      ? resolveSchema({
+          requested: req.headers.get(
+            WRITE_METHODS.has(req.method) ? 'content-profile' : 'accept-profile',
+          ),
+          order: schemaOrder,
+          known: schemas,
+        })
+      : defaultSchema;
+    const state = schemas.get(schema);
+    if (state === undefined) {
+      throw new ApiError({ status: HttpStatus.NotFound, message: `Unknown schema "${schema}"` });
+    }
+    // The default schema runs on the connection's own search_path (no change); a
+    // non-default one is pinned so unqualified relation names resolve there.
+    const searchPath = schema === defaultSchema ? undefined : schema;
+
     if (req.method === 'OPTIONS') {
-      return handleOptions({ url, modules });
+      return handleOptions({ url, modules: state.modules });
     }
 
     const op = METHOD_OP[req.method];
@@ -1129,8 +1236,8 @@ export async function handleRequest({
       });
     }
     const relation = relationNameFromUrl(url);
-    const module = modules.get(relation);
-    const columns = catalog[relation];
+    const module = state.modules.get(relation);
+    const columns = state.catalog[relation];
     if (module === undefined || columns === undefined) {
       throw new ApiError({
         status: HttpStatus.NotFound,
@@ -1151,10 +1258,11 @@ export async function handleRequest({
       columns,
       module,
       adapter,
-      primaryKeys,
-      catalog,
-      modules,
-      foreignKeys,
+      primaryKeys: state.primaryKeys,
+      catalog: state.catalog,
+      modules: state.modules,
+      foreignKeys: state.foreignKeys,
+      searchPath,
     };
     let response: Response;
     switch (op) {
@@ -1175,6 +1283,13 @@ export async function handleRequest({
           status: HttpStatus.MethodNotAllowed,
           message: `Unsupported operation`,
         });
+    }
+
+    // Multi-schema apps echo the resolved schema on every representation (a response
+    // that carries a body/Content-Type), as PostgREST does. 204s and minimal writes
+    // carry none; errors are built separately and never carry it.
+    if (multiSchema && response.headers.has('content-type')) {
+      response.headers.set('content-profile', schema);
     }
 
     const finished = config?.afterExecute
