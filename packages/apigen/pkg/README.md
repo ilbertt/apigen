@@ -148,7 +148,8 @@ full-text `fts plfts phfts wfts` (with an optional `(config)`, e.g.
 `description=fts(english).red`), and array/range `cs cd ov sl sr nxr nxl adj` — each
 optionally negated with a `not.` prefix, e.g. `customer=not.eq.Alice`, and the
 comparison/pattern operators also take an `(any)`/`(all)` quantifier over a `{…}` list,
-e.g. `id=eq(any).{1,2,3}`. Plus `order`
+e.g. `id=eq(any).{1,2,3}`. Conditions combine with the logical operators `and` / `or`
+(nestable, `not.`-negatable), e.g. `or=(status.eq.paid,amount.gt.100)`. Plus `order`
 (`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast to
 the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a 400
 and never reaches the database.
@@ -235,9 +236,8 @@ bunx apigen gen --help
 
 ## Not included (yet)
 
-Logical operators (`or`/`and`/`not`), CSV and other content types, embeds, OpenAPI
-generation, divergent `withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of
-scope for now. apigen also enforces `allowedColumns` up front (a
+CSV and other content types, embeds, OpenAPI generation, divergent `withCheck`, a `pg`
+adapter, and SQLite/D1 dialects are out of scope for now. apigen also enforces `allowedColumns` up front (a
 `403`) instead of deferring to Postgres, so an unknown or forbidden column is rejected
 before the query runs.
 
