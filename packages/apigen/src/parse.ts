@@ -5,13 +5,17 @@ import {
   FTS_OPS,
   type OrderTerm,
   type ParsedRequest,
+  QUANTIFIABLE_OPS,
 } from './contract.js';
 import { ApiError, HttpStatus } from './http.js';
 
 const RESERVED = new Set(['select', 'order', 'limit', 'offset']);
 const FILTER_OP_SET = new Set<string>(FILTER_OPS);
 const FTS_OP_SET = new Set<string>(FTS_OPS);
-/** `op` or `op(config)` followed by `.` — the config parens tolerate dots (`pg_catalog.english`). */
+const QUANTIFIABLE_OP_SET = new Set<string>(QUANTIFIABLE_OPS);
+/** The parenthetical in `op(x)` is either a full-text config or an any/all quantifier. */
+const QUANTIFIERS = new Set(['any', 'all']);
+/** `op` or `op(x)` followed by `.` — the parens tolerate dots (`pg_catalog.english`). */
 const OP_RE = /^([a-zA-Z]+)(?:\(([^)]*)\))?\./;
 const IS_VALUES = new Set(['null', 'true', 'false', 'unknown']);
 const COLUMN_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -64,6 +68,19 @@ function parseInList(rest: string): string[] {
   return inner.split(',').map((v) => stripQuotes(v.trim()));
 }
 
+/** The `{…}` operand of an any/all quantifier, each element transformed per operator. */
+function parseQuantified({ op, rest }: { op: FilterOp; rest: string }): string[] {
+  if (!(rest.startsWith('{') && rest.endsWith('}'))) {
+    badRequest(`Expected a "{…}" array for the any/all quantifier, got "${rest}"`);
+  }
+  const inner = rest.slice(1, -1);
+  if (inner.trim().length === 0) {
+    badRequest('any/all array must not be empty');
+  }
+  const toElement = op === 'like' || op === 'ilike' ? toLikePattern : stripQuotes;
+  return inner.split(',').map((v) => toElement(v.trim()));
+}
+
 const NOT_PREFIX = 'not.';
 
 function parseOperand({
@@ -106,17 +123,42 @@ function parseFilter({ column, raw }: { column: string; raw: string }): Filter {
   if (match === null || opToken === undefined) {
     badRequest(`Filter "${column}=${raw}" must be "op.value"`);
   }
-  const config = match[2];
+  const paren = match[2];
   const rest = body.slice(match[0]?.length ?? 0);
   if (!FILTER_OP_SET.has(opToken)) {
     badRequest(`Unsupported filter operator "${opToken}" on column "${column}"`);
   }
-  if (config !== undefined && !FTS_OP_SET.has(opToken)) {
-    badRequest(`Operator "${opToken}" does not take a "(config)"`);
+  const op = opToken as FilterOp;
+  const operand = parseOperandWithParen({ column, op, rest, paren });
+  return negated ? { ...operand, negated } : operand;
+}
+
+/** Resolve the `op(paren)` parenthetical into a quantifier, a full-text config, or nothing. */
+function parseOperandWithParen({
+  column,
+  op,
+  rest,
+  paren,
+}: {
+  column: string;
+  op: FilterOp;
+  rest: string;
+  paren: string | undefined;
+}): Filter {
+  if (paren === undefined) {
+    return parseOperand({ column, op, rest });
   }
-  const operand = parseOperand({ column, op: opToken as FilterOp, rest });
-  const withConfig = config === undefined ? operand : { ...operand, config };
-  return negated ? { ...withConfig, negated } : withConfig;
+  if (QUANTIFIERS.has(paren)) {
+    if (!QUANTIFIABLE_OP_SET.has(op)) {
+      badRequest(`Operator "${op}" does not take an any/all quantifier`);
+    }
+    const values = parseQuantified({ op, rest });
+    return { column, op, value: rest, values, quantifier: paren as 'any' | 'all' };
+  }
+  if (FTS_OP_SET.has(op)) {
+    return { ...parseOperand({ column, op, rest }), config: paren };
+  }
+  badRequest(`Operator "${op}" does not take a "(${paren})"`);
 }
 
 function parseOrder(raw: string | null): OrderTerm[] {

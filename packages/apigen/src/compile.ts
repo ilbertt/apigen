@@ -45,6 +45,23 @@ const SET_OP_SQL: Record<string, string> = {
   adj: '-|-', // adjacent to
 };
 
+/** Operator symbol for an `op(any)`/`op(all)` quantifier: `col <symbol> any(array[…])`. */
+const QUANT_OP_SQL: Record<string, string> = {
+  eq: '=',
+  neq: '<>',
+  gt: '>',
+  gte: '>=',
+  lt: '<',
+  lte: '<=',
+  like: 'like',
+  ilike: 'ilike',
+  match: '~',
+  imatch: '~*',
+};
+
+/** Quantified operators whose array elements bind as text (patterns/regex), not the column type. */
+const TEXT_QUANT_OPS = new Set(['like', 'ilike', 'match', 'imatch']);
+
 const CAST_TYPE_RE = /^[a-zA-Z0-9_]+$/;
 
 /** RETURNING sentinel used only by update's WITH CHECK re-verification. */
@@ -99,7 +116,27 @@ function projection({ cols, columns }: { cols: readonly string[]; columns: Relat
   return join({ values: frags, separator: ', ' });
 }
 
+function quantifiedCondition({
+  filter,
+  id,
+  pgType,
+}: {
+  filter: Filter;
+  id: Sql;
+  pgType: string;
+}): Sql {
+  const symbol = raw(QUANT_OP_SQL[filter.op] as string);
+  const quant = raw(filter.quantifier as string);
+  const items = (filter.values ?? []).map((value) =>
+    TEXT_QUANT_OPS.has(filter.op) ? sql`${value}::text` : castValue({ value, pgType }),
+  );
+  return sql`${id} ${symbol} ${quant}(array[${join({ values: items, separator: ', ' })}])`;
+}
+
 function filterCondition({ filter, id, pgType }: { filter: Filter; id: Sql; pgType: string }): Sql {
+  if (filter.quantifier !== undefined) {
+    return quantifiedCondition({ filter, id, pgType });
+  }
   switch (filter.op) {
     case 'eq':
     case 'neq':

@@ -160,6 +160,16 @@ test('filters: full-text search matches lexemes in a text column', async () => {
   expect(await customers('/orders?customer=not.fts.Alice')).toEqual(['Bob']);
 });
 
+test('filters: any/all quantifiers apply the operator across a {…} list', async () => {
+  const customers = async (query: string): Promise<unknown[]> =>
+    (await rows(await get(query, ORG1))).map((r) => r.customer);
+  // ORG1 rows: Alice (id 1, amount 100), Bob (id 2, amount 50.5).
+  expect(await customers('/orders?id=eq(any).{1,2}&order=id')).toEqual(['Alice', 'Bob']);
+  expect(await customers('/orders?customer=like(any).{A*,B*}&order=id')).toEqual(['Alice', 'Bob']);
+  expect(await customers('/orders?customer=like(all).{A*,*e}')).toEqual(['Alice']);
+  expect(await customers('/orders?amount=gt(all).{40,60}')).toEqual(['Alice']);
+});
+
 test('order / limit / offset', async () => {
   const res = await get('/orders?order=amount.desc&limit=1', ORG1);
   expect((await rows(res)).map((r) => r.customer)).toEqual(['Alice']);

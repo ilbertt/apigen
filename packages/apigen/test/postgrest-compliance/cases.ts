@@ -77,6 +77,13 @@ export const CASES: DiffCase[] = [
   { name: 'filter nxl (not left of)', method: 'GET', path: '/orders?span=nxl.[10,20)&order=id' },
   { name: 'filter adj (adjacent)', method: 'GET', path: '/orders?span=adj.[10,20)&order=id' },
 
+  // any/all quantifiers: the operator is applied against a {…} array of operands
+  { name: 'filter eq(any)', method: 'GET', path: '/orders?id=eq(any).{1,2}&order=id' },
+  { name: 'filter like(any)', method: 'GET', path: '/orders?customer=like(any).{A*,C*}&order=id' },
+  { name: 'filter like(all)', method: 'GET', path: '/orders?customer=like(all).{A*,*e}&order=id' },
+  { name: 'filter gt(all)', method: 'GET', path: '/orders?amount=gt(all).{50,90}&order=id' },
+  { name: 'filter not.eq(any)', method: 'GET', path: '/orders?id=not.eq(any).{1}&order=id' },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },

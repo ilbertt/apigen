@@ -146,7 +146,9 @@ export const products = relation('products').select({
 `select`, the filters `eq neq gt gte lt lte in is isdistinct like ilike match imatch`,
 full-text `fts plfts phfts wfts` (with an optional `(config)`, e.g.
 `description=fts(english).red`), and array/range `cs cd ov sl sr nxr nxl adj` — each
-optionally negated with a `not.` prefix, e.g. `customer=not.eq.Alice`. Plus `order`
+optionally negated with a `not.` prefix, e.g. `customer=not.eq.Alice`, and the
+comparison/pattern operators also take an `(any)`/`(all)` quantifier over a `{…}` list,
+e.g. `id=eq(any).{1,2,3}`. Plus `order`
 (`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast to
 the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a 400
 and never reaches the database.
