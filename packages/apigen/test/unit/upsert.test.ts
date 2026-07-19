@@ -99,3 +99,71 @@ test('the conflict target defaults to the PK when on_conflict is absent', async 
   expect(res.status).toBe(200);
   expect(((await res.json()) as { name: string }[]).map((r) => r.name)).toEqual(['Widget PK']);
 });
+
+function put({
+  path,
+  body,
+  prefer,
+}: {
+  path: string;
+  body: unknown;
+  prefer?: string;
+}): Promise<Response> {
+  return app.handle(
+    new Request(`http://localhost${path}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', ...(prefer ? { prefer } : {}) },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+test('PUT keyed by the PK: 200 update (representation), 201 insert, 204 minimal', async () => {
+  const upd = await put({
+    path: '/products?sku=eq.WIDGET',
+    body: { sku: 'WIDGET', name: 'W2', price: 9 },
+    prefer: 'return=representation',
+  });
+  expect(upd.status).toBe(200);
+  expect(((await upd.json()) as { name: string }[]).map((r) => r.name)).toEqual(['W2']);
+
+  const ins = await put({
+    path: '/products?sku=eq.NEW',
+    body: { sku: 'NEW', name: 'New', price: 1 },
+    prefer: 'return=representation',
+  });
+  expect(ins.status).toBe(201);
+
+  const min = await put({
+    path: '/products?sku=eq.WIDGET',
+    body: { sku: 'WIDGET', name: 'W3', price: 8 },
+  });
+  expect(min.status).toBe(204);
+});
+
+test('PUT rejects a non-PK filter (405) and a body/URL PK mismatch (400)', async () => {
+  const notPk = await put({
+    path: '/products?name=eq.Widget',
+    body: { sku: 'WIDGET', name: 'X', price: 1 },
+  });
+  expect(notPk.status).toBe(405);
+  const mismatch = await put({
+    path: '/products?sku=eq.WIDGET',
+    body: { sku: 'OTHER', name: 'X', price: 1 },
+  });
+  expect(mismatch.status).toBe(400);
+});
+
+test('columns= inserts only the named columns; the rest take DB defaults', async () => {
+  const res = await app.handle(
+    new Request('http://localhost/products?columns=sku,name', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', prefer: 'return=representation' },
+      body: JSON.stringify({ sku: 'ZED', name: 'Zed', price: 999 }), // price is ignored
+    }),
+  );
+  expect(res.status).toBe(201);
+  const [row] = (await res.json()) as { name: string; price: number }[];
+  expect(row?.name).toBe('Zed');
+  expect(row?.price).toBe(0); // the default, not 999
+});
