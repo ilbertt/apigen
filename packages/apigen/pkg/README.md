@@ -184,7 +184,8 @@ number, and `timestamptz` as ISO-8601.
   updated an existing row, `201` when it inserted. `PUT ?<pk>=eq.<v>` upserts a single row
   keyed by its whole primary key.
 - **`columns=<cols>`** on an insert fixes the column set — body keys outside it are
-  ignored and the rest take their database defaults.
+  ignored and the rest take their database defaults. `Prefer: missing=default` fills a
+  column that's in the set but absent from a row with its database default (not `null`).
 - **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
   `406` (`PGRST116`) when the result isn't exactly one row.
 - **CSV**: `Accept: text/csv` returns the rows as CSV (header row + text values, RFC-4180

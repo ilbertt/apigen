@@ -69,7 +69,7 @@ Two features are marked ⊘ as deliberate boundaries, not gaps:
 | Writes | `Prefer: return=headers-only` + PK-derived `Location` | ✅ |
 | Writes | `POST` upsert (`on_conflict`, `resolution=merge`/`ignore`; 200-on-update / 201-on-insert) | ✅ |
 | Writes | `PUT` (PK-keyed upsert) + `columns=` | ✅ |
-| Writes | `Prefer: missing=default` | 🚧 |
+| Writes | `Prefer: missing=default` | ✅ |
 | Embedding | FK resource embedding `select=*,related(*)` — one-to-many + many-to-one | ✅ |
 | Embedding | `!inner` (drop base rows with no match) | ✅ |
 | Embedding | embedded filters/order/limit (`<embed>.<param>`) | ✅ |

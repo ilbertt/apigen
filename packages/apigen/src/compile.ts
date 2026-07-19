@@ -482,6 +482,8 @@ export function compileSelect({
 export interface CompiledInsert {
   readonly query: Query;
   readonly rowCount: number;
+  /** Present for the missing=default path: re-verify WITH CHECK on the inserted ctids. */
+  readonly verify?: (ctids: readonly string[]) => Query;
 }
 
 /** Upsert conflict handling: `merge` → DO UPDATE (set non-key columns), `ignore` → DO NOTHING. */
@@ -517,6 +519,7 @@ export function compileInsert({
   policy,
   returning,
   conflict,
+  missingDefault,
 }: {
   relation: string;
   columns: RelationColumns;
@@ -525,16 +528,37 @@ export function compileInsert({
   policy: Policy;
   returning: readonly SelectItem[];
   conflict?: ConflictTarget;
+  missingDefault?: boolean;
 }): CompiledInsert {
   const colList = join({ values: insertColumns.map(ident), separator: ', ' });
   const valueRows = rows.map((row) => {
     const cells = insertColumns.map((col) =>
-      castValue({ value: row[col] ?? null, pgType: pgTypeOf({ columns, col }) }),
+      // missing=default: a column absent from this row inserts DEFAULT, not NULL.
+      missingDefault && !(col in row)
+        ? raw('default')
+        : castValue({ value: row[col] ?? null, pgType: pgTypeOf({ columns, col }) }),
     );
     return sql`(${join({ values: cells, separator: ', ' })})`;
   });
   const values = join({ values: valueRows, separator: ', ' });
   const proj = projection({ items: returning, columns });
+  if (missingDefault) {
+    // DEFAULT isn't allowed inside INSERT…SELECT VALUES, so insert directly and enforce
+    // WITH CHECK by re-verifying the inserted rows' ctids (as update does).
+    const outputCols = join({
+      values: returning.map((item) => ident(item.alias ?? item.column)),
+      separator: ', ',
+    });
+    const ctid = raw(quoteIdent(CTID_KEY));
+    const stmt = sql`with _apigen_ins as (insert into ${ident(relation)} (${colList}) values ${values} returning ctid as ${ctid}, ${proj}) select coalesce((select json_agg(_apigen_rows) from (select ${outputCols} from _apigen_ins) _apigen_rows), '[]')::text as body, (select count(*)::int from _apigen_ins) as page, 0 as updated, coalesce((select json_agg(${ctid}::text) from _apigen_ins), '[]')::text as ctids`;
+    const verify = (ctids: readonly string[]): Query => {
+      const tids = join({ values: ctids.map((c) => sql`${c}::tid`), separator: ', ' });
+      return toQuery(
+        sql`select 1 from ${ident(relation)} where ctid in (${tids}) and not (${policy.fragment}) limit 1`,
+      );
+    };
+    return { query: toQuery(stmt), rowCount: rows.length, verify };
+  }
   // WITH CHECK is applied as a WHERE over the VALUES rows, so the policy can only
   // reference columns present in the request body — a column filled by a DB
   // default is not visible to the predicate here (PLAN's insert shape). Rows that
