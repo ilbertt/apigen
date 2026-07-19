@@ -5,6 +5,7 @@ import {
   type FilterOp,
   FTS_OPS,
   isFilterGroup,
+  type JsonPathStep,
   type OrderTerm,
   type ParsedRequest,
   QUANTIFIABLE_OPS,
@@ -40,8 +41,24 @@ function assertColumn(name: string): string {
 }
 
 const CAST_RE = /^[a-zA-Z0-9_]+$/;
+const PATH_KEY_RE = /^[a-zA-Z0-9_]+$/;
 
-/** Parse one `select` token: `[alias:]column[::type]`. */
+/** Parse a `column[->a][->>b]` expression into its base column and JSON-path steps. */
+function parsePath(expr: string): { column: string; path?: JsonPathStep[] } {
+  const parts = expr.split(/(->>|->)/); // e.g. "meta->a->>b" → [meta, ->, a, ->>, b]
+  const column = assertColumn(parts[0] ?? '');
+  const path: JsonPathStep[] = [];
+  for (let i = 1; i < parts.length; i += 2) {
+    const key = parts[i + 1] ?? '';
+    if (!PATH_KEY_RE.test(key)) {
+      badRequest(`Invalid JSON path key "${key}" in select`);
+    }
+    path.push({ arrow: parts[i] as '->' | '->>', key });
+  }
+  return path.length > 0 ? { column, path } : { column };
+}
+
+/** Parse one `select` token: `[alias:]column[->path][::type]`. */
 function parseSelectItem(token: string): SelectItem {
   let rest = token;
   let cast: string | undefined;
@@ -59,8 +76,13 @@ function parseSelectItem(token: string): SelectItem {
     alias = assertColumn(rest.slice(0, aliasAt));
     rest = rest.slice(aliasAt + 1);
   }
-  const column = assertColumn(rest);
-  return { column, ...(alias !== undefined && { alias }), ...(cast !== undefined && { cast }) };
+  const { column, path } = parsePath(rest);
+  return {
+    column,
+    ...(alias !== undefined && { alias }),
+    ...(cast !== undefined && { cast }),
+    ...(path !== undefined && { path }),
+  };
 }
 
 function parseSelect(raw: string | null): readonly SelectItem[] | undefined {

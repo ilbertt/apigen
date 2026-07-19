@@ -133,6 +133,20 @@ export const CASES: DiffCase[] = [
     body: { org_id: ACME, customer: 'Dave', amount: 42.0, created_at: '2024-06-01T00:00:00Z' },
   },
 
+  // JSON-path selection over the `meta` jsonb column ({tier, age})
+  { name: 'select json ->> (text)', method: 'GET', path: '/orders?select=id,meta->>tier&order=id' },
+  { name: 'select json -> (json)', method: 'GET', path: '/orders?select=id,meta->tier&order=id' },
+  {
+    name: 'select json path aliased',
+    method: 'GET',
+    path: '/orders?select=id,plan:meta->>tier&order=id',
+  },
+  {
+    name: 'select json path cast',
+    method: 'GET',
+    path: '/orders?select=id,meta->>age::int&order=id',
+  },
+
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
   { name: 'limit', method: 'GET', path: '/orders?order=id&limit=2' },

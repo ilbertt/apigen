@@ -143,7 +143,8 @@ export const products = relation('products').select({
 
 ## Query parameters (PostgREST subset)
 
-`select` (with `alias:col` renaming and `col::type` casting), the filters
+`select` (with `alias:col` renaming, `col::type` casting, and `col->k`/`col->>k` JSON
+paths), the filters
 `eq neq gt gte lt lte in is isdistinct like ilike match imatch`,
 full-text `fts plfts phfts wfts` (with an optional `(config)`, e.g.
 `description=fts(english).red`), and array/range `cs cd ov sl sr nxr nxl adj` — each

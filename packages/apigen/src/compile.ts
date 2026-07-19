@@ -12,6 +12,7 @@ import {
   type Filter,
   type FunctionArgs,
   isFilterGroup,
+  type JsonPathStep,
   type ParsedRequest,
   type Query,
   type RelationColumns,
@@ -111,16 +112,30 @@ function castValue({ value, pgType }: { value: unknown; pgType: string }): Sql {
   return sql`${bindValue({ value, pgType })}${castSuffix(pgType)}`;
 }
 
+/** `col -> 'a' ->> 'b'` — an integer key is an array index, anything else an object key. */
+function jsonPathExpr({ base, path }: { base: Sql; path: readonly JsonPathStep[] }): Sql {
+  let expr = base;
+  for (const step of path) {
+    const arrow = raw(step.arrow);
+    const key = /^\d+$/.test(step.key) ? raw(step.key) : sql`${step.key}`;
+    expr = sql`${expr} ${arrow} ${key}`;
+  }
+  return expr;
+}
+
 function projectItem({ item, columns }: { item: SelectItem; columns: RelationColumns }): Sql {
   pgTypeOf({ columns, col: item.column }); // presence check against the catalog
   const base = ident(item.column);
   // A plain column projects bare so json_agg labels it by its own name (byte-identical
-  // to before). An alias or cast needs an explicit label to name the JSON key.
-  if (item.alias === undefined && item.cast === undefined) {
+  // to before). An alias, cast, or JSON path needs an explicit label for the JSON key.
+  if (item.alias === undefined && item.cast === undefined && item.path === undefined) {
     return base;
   }
-  const expr = item.cast === undefined ? base : sql`${base}${castSuffix(item.cast)}`;
-  return sql`${expr} as ${ident(item.alias ?? item.column)}`;
+  const walked = item.path === undefined ? base : sql`(${jsonPathExpr({ base, path: item.path })})`;
+  const expr = item.cast === undefined ? walked : sql`${walked}${castSuffix(item.cast)}`;
+  // PostgREST names a JSON-path column after its last key unless explicitly aliased.
+  const label = item.alias ?? item.path?.at(-1)?.key ?? item.column;
+  return sql`${expr} as ${ident(label)}`;
 }
 
 function projection({

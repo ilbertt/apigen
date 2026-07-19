@@ -37,6 +37,27 @@ test('select: renaming (alias:col), casting (col::type), and both', () => {
   ]);
 });
 
+test('select: JSON paths (->/->>), nested, aliased, and cast', () => {
+  expect(parseRequest(urlFor('select=meta->>tier')).select).toEqual([
+    { column: 'meta', path: [{ arrow: '->>', key: 'tier' }] },
+  ]);
+  expect(parseRequest(urlFor('select=meta->a->>b')).select).toEqual([
+    {
+      column: 'meta',
+      path: [
+        { arrow: '->', key: 'a' },
+        { arrow: '->>', key: 'b' },
+      ],
+    },
+  ]);
+  expect(parseRequest(urlFor('select=plan:meta->>tier')).select).toEqual([
+    { column: 'meta', alias: 'plan', path: [{ arrow: '->>', key: 'tier' }] },
+  ]);
+  expect(parseRequest(urlFor('select=meta->>age::int')).select).toEqual([
+    { column: 'meta', cast: 'int', path: [{ arrow: '->>', key: 'age' }] },
+  ]);
+});
+
 test('select: an unsafe cast type is a 400', () => {
   expectBadRequest(() => parseRequest(urlFor('select=amount::text)')));
 });
