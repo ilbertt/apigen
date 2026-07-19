@@ -42,7 +42,7 @@ tracked gap toward full PostgREST compatibility). The goal is to move every row 
 | Horizontal filter | `eq` `neq` `gt` `gte` `lt` `lte` `in` `is` `like` `ilike` | ✅ |
 | Horizontal filter | `not.` negation, `match` `imatch`, `isdistinct` | ✅ |
 | Horizontal filter | full-text `fts` `plfts` `phfts` `wfts` (with `(config)`) | ✅ |
-| Horizontal filter | array/range `cs` `cd` `ov` `sl` `sr` `nxr` `nxl` `adj` | 🚧 |
+| Horizontal filter | array/range `cs` `cd` `ov` `sl` `sr` `nxr` `nxl` `adj` | ✅ |
 | Horizontal filter | `any`/`all` quantifiers | 🚧 |
 | Horizontal filter | logical `or` `and` `not` (nested) | 🚧 |
 | Vertical filter | column projection (`select=a,b`) | ✅ |

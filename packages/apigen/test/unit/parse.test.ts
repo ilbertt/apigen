@@ -96,6 +96,16 @@ const FILTER_CASES: readonly { readonly query: string; readonly expected: Filter
     query: 'description=not.wfts.car',
     expected: { column: 'description', op: 'wfts', value: 'car', negated: true },
   },
+  // array/range operators: the `{…}` / `[…)` literal is carried verbatim to the cast.
+  { query: 'tags=cs.{vip}', expected: { column: 'tags', op: 'cs', value: '{vip}' } },
+  { query: 'tags=cd.{a,b}', expected: { column: 'tags', op: 'cd', value: '{a,b}' } },
+  { query: 'tags=ov.{a}', expected: { column: 'tags', op: 'ov', value: '{a}' } },
+  { query: 'span=sl.[1,10)', expected: { column: 'span', op: 'sl', value: '[1,10)' } },
+  { query: 'span=adj.[10,20)', expected: { column: 'span', op: 'adj', value: '[10,20)' } },
+  {
+    query: 'tags=not.cs.{vip}',
+    expected: { column: 'tags', op: 'cs', value: '{vip}', negated: true },
+  },
 ];
 
 for (const { query, expected } of FILTER_CASES) {
