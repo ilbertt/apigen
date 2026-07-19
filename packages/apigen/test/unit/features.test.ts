@@ -150,6 +150,16 @@ test('filters: match / imatch / isdistinct / negation compose onto the policy', 
   expect(await customers('/orders?paid=not.is.true')).toEqual(['Bob']);
 });
 
+test('filters: full-text search matches lexemes in a text column', async () => {
+  const customers = async (query: string): Promise<unknown[]> =>
+    (await rows(await get(query, ORG1))).map((r) => r.customer);
+  // to_tsvector lowercases to a lexeme, so the query casing does not matter.
+  expect(await customers('/orders?customer=fts.Alice')).toEqual(['Alice']);
+  expect(await customers('/orders?customer=fts(english).alice')).toEqual(['Alice']);
+  expect(await customers('/orders?customer=wfts.bob')).toEqual(['Bob']);
+  expect(await customers('/orders?customer=not.fts.Alice')).toEqual(['Bob']);
+});
+
 test('order / limit / offset', async () => {
   const res = await get('/orders?order=amount.desc&limit=1', ORG1);
   expect((await rows(res)).map((r) => r.customer)).toEqual(['Alice']);

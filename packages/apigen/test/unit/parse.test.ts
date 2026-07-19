@@ -77,6 +77,25 @@ const FILTER_CASES: readonly { readonly query: string; readonly expected: Filter
     query: 'customer=not.like.A*',
     expected: { column: 'customer', op: 'like', value: 'A%', negated: true },
   },
+  // full-text search: value is verbatim; `op(config)` carries the language.
+  { query: 'description=fts.red', expected: { column: 'description', op: 'fts', value: 'red' } },
+  {
+    query: 'description=fts(english).red',
+    expected: { column: 'description', op: 'fts', value: 'red', config: 'english' },
+  },
+  {
+    query: 'description=plfts.blue',
+    expected: { column: 'description', op: 'plfts', value: 'blue' },
+  },
+  {
+    query: 'description=phfts.red',
+    expected: { column: 'description', op: 'phfts', value: 'red' },
+  },
+  { query: 'description=wfts.car', expected: { column: 'description', op: 'wfts', value: 'car' } },
+  {
+    query: 'description=not.wfts.car',
+    expected: { column: 'description', op: 'wfts', value: 'car', negated: true },
+  },
 ];
 
 for (const { query, expected } of FILTER_CASES) {
@@ -142,6 +161,10 @@ test('a negative offset is a 400', () => {
 
 test('an unknown filter operator is a 400', () => {
   expectBadRequest(() => parseRequest(urlFor('status=frobnicate.1')));
+});
+
+test('a "(config)" on a non-full-text operator is a 400', () => {
+  expectBadRequest(() => parseRequest(urlFor('amount=eq(english).1')));
 });
 
 test('an empty "in" list is a 400', () => {

@@ -2,8 +2,8 @@
  * Request specs for PostgREST compliance. Each case is fired at both a real
  * PostgREST and at apigen in-process (see compliance.test.ts) and asserted to match
  * byte-for-byte. Every case is a behavior apigen guarantees to match; intentional
- * divergences (logical operators, full-text, CSV, up-front allowedColumns) are out of
- * scope — documented in the README, not parked here as skipped tests.
+ * divergences (logical operators, CSV, up-front allowedColumns) are out of scope —
+ * documented in the README, not parked here as skipped tests.
  */
 export interface DiffCase {
   readonly name: string;
@@ -50,6 +50,18 @@ export const CASES: DiffCase[] = [
   { name: 'filter not.like', method: 'GET', path: '/orders?customer=not.like.A*&order=id' },
   { name: 'filter not.is null', method: 'GET', path: '/orders?note=not.is.null&order=id' },
   { name: 'filter not.match', method: 'GET', path: '/orders?customer=not.match.^A&order=id' },
+
+  // full-text search over the `description` prose column
+  { name: 'filter fts', method: 'GET', path: '/orders?description=fts.red&order=id' },
+  {
+    name: 'filter fts (config)',
+    method: 'GET',
+    path: '/orders?description=fts(english).bicycle&order=id',
+  },
+  { name: 'filter plfts', method: 'GET', path: '/orders?description=plfts.red%20car&order=id' },
+  { name: 'filter phfts', method: 'GET', path: '/orders?description=phfts.red%20car&order=id' },
+  { name: 'filter wfts', method: 'GET', path: '/orders?description=wfts.car&order=id' },
+  { name: 'filter not.fts', method: 'GET', path: '/orders?description=not.fts.red&order=id' },
 
   { name: 'order desc', method: 'GET', path: '/orders?order=amount.desc' },
   { name: 'order asc nullslast', method: 'GET', path: '/orders?order=amount.asc.nullslast' },
