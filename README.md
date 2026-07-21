@@ -54,18 +54,11 @@ npx apigen gen --database-url postgres://user:pw@localhost:5432/app --out src/ap
 
 Now expose the tables you want, each with its own policy. The snippets below build up a single file.
 
-**1. Connect to your database.** apigen doesn't own the connection — you pass in your own client.
+**1. Expose a public relation.** A read-only catalog needs no authorization. Optional `beforeExecute` / `afterExecute` hooks let you observe or decorate each request.
 
 ```ts
-import postgres from 'postgres';
 import { Apigen, relation } from './api.gen';
 
-const db = postgres('postgres://...');
-```
-
-**2. Expose a public relation.** A read-only catalog needs no authorization. Optional `beforeExecute` / `afterExecute` hooks let you observe or decorate each request.
-
-```ts
 // A public, read-only catalog — no authorization needed.
 const products = relation('products')
   .select({
@@ -79,7 +72,7 @@ const products = relation('products')
   });
 ```
 
-**3. Add access policies to a private relation.** Each operation is authorized on its own: return `false` for a 403, or a SQL policy that scopes the query to the caller. `allowedColumns` bounds what a write can touch. Operations you don't declare (here `.update` / `.delete`) are rejected — nothing is exposed by default.
+**2. Add access policies to a private relation.** Each operation is authorized on its own: return `false` for a 403, or a SQL policy that scopes the query to the caller. `allowedColumns` bounds what a write can touch. Operations you don't declare (here `.update` / `.delete`) are rejected — nothing is exposed by default.
 
 ```ts
 // Private: every request is scoped to the caller's org.
@@ -110,9 +103,11 @@ const orders = relation('orders')
 // no .update / .delete → those operations return 403
 ```
 
-**4. Mount and serve.** `app.handle` is a standard WinterTC `(Request) => Response`, so it runs on any compatible runtime or drops into your existing server.
+**3. Mount and serve.** Bring your own database client — apigen doesn't own the connection. `app.handle` is a standard WinterTC `(Request) => Response`, so it runs on any compatible runtime or drops into your existing server.
 
 ```ts
+import { db } from './your-db-client';
+
 const app = new Apigen({ db }).use(products).use(orders);
 
 // app.handle is a WinterTC (Request) => Response
