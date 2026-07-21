@@ -72,8 +72,6 @@ const products = relation('products')
   });
 ```
 
-A read-only catalog needs no authorization. Optional `beforeExecute` / `afterExecute` hooks let you observe or decorate each request.
-
 **2. Add access policies to a private relation.**
 
 ```ts
@@ -105,8 +103,6 @@ const orders = relation('orders')
 // no .update / .delete → those operations return 403
 ```
 
-Each operation is authorized on its own: return `false` for a 403, or a SQL policy that scopes the query to the caller. `allowedColumns` bounds what a write can touch. Operations you don't declare (here `.update` / `.delete`) are rejected — nothing is exposed by default.
-
 **3. Mount and serve.**
 
 ```ts
@@ -114,11 +110,9 @@ import { db } from './your-db-client';
 
 const app = new Apigen({ db }).use(products).use(orders);
 
-// app.handle is a WinterTC (Request) => Response
+// app.handle is a WinterTC (Request) => Response — mount it into any server
 Bun.serve({ fetch: app.handle });
 ```
-
-Bring your own database client — apigen doesn't own the connection. `app.handle` is a standard WinterTC `(Request) => Response`, so it runs on any compatible runtime or drops into your existing server.
 
 **4. Send requests.**
 

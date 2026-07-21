@@ -48,9 +48,6 @@ import { Apigen, relation } from './api.gen';
 const products = relation('products').select({});
 ```
 
-A relation with no `authorization` is public. Optional `beforeExecute` / `afterExecute`
-hooks (see [Authorization](#authorization)) let you observe or decorate each request.
-
 **2. Add access policies to a private relation.**
 
 ```ts
@@ -77,10 +74,6 @@ const orders = relation('orders')
 // unregistered verbs (.update / .delete) are denied
 ```
 
-Each operation is authorized on its own: return `false` for a 403, or a SQL policy that
-scopes the query to the caller. `allowedColumns` bounds what a read exposes and a write can
-touch.
-
 **3. Mount and serve.**
 
 ```ts
@@ -90,10 +83,9 @@ const app = new Apigen({ db: postgres(process.env.DATABASE_URL!) })
   .use(products)
   .use(orders);
 
-Bun.serve({ port: 3000, fetch: app.handle }); // Deno.serve(app.handle) / a Node adapter
+// app.handle is a WinterTC (Request) => Response — Deno.serve(app.handle) / a Node adapter
+Bun.serve({ port: 3000, fetch: app.handle });
 ```
-
-`app.handle` is a WinterTC `(Request) => Response`, so it drops into any compatible server.
 
 **4. Send requests.**
 
@@ -101,9 +93,6 @@ Bun.serve({ port: 3000, fetch: app.handle }); // Deno.serve(app.handle) / a Node
 curl 'http://localhost:3000/orders?status=eq.paid&order=amount.desc&limit=10' \
   -H 'authorization: Bearer …'
 ```
-
-Requests are PostgREST-style — the same wire format the Supabase client and PostgREST
-tooling speak.
 
 ## Authorization
 

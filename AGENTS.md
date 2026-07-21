@@ -37,7 +37,7 @@ When running a script, always check `package.json` scripts (root and per-package
 Packages fall in two buckets:
 
 - **Published packages** (have a `pkg/` directory) carry **two** READMEs:
-  - **`packages/<package>/pkg/README.md`** — public, user-facing. Ships to npm as part of `@ilbertt/<package>` (listed under `"files"` in `pkg/package.json`). This is what users see on the npm page. Covers install, usage, and public API. Must use the published name (`@ilbertt/...`), not the workspace name (`@repo/...`).
+  - **`packages/<package>/pkg/README.md`** — public, user-facing. Ships to npm as part of `@ilbertt/<package>` (listed under `"files"` in `pkg/package.json`). This is what users see on the npm page. Covers install, usage, and public API. Must use the published name (`@ilbertt/...`), not the workspace name (`@repo/...`). **All links must be absolute URLs** — relative paths and same-page `#anchor` links break on the npm page (e.g. link the examples as `https://github.com/ilbertt/apigen/tree/main/examples`, not `./examples`).
   - **`packages/<package>/README.md`** — internal contributor doc. Covers source layout, dev scripts, and constraints. **Must link to `pkg/README.md`** and **must not duplicate install/usage** — when in doubt, the public README wins and the internal one points to it.
 - **Internal-only packages** (no `pkg/`) may not need a README at all. Add one only when there's contributor-relevant context that isn't obvious from the source.
 
