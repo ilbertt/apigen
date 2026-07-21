@@ -24,14 +24,12 @@ You get the table-to-API ergonomics of Supabase, as code you own instead of a se
 
 ## Comparison
 
-| Solution | Fully extensible | Customize access policies | DB schema is the API | Self-hostable |
-|-|-|-|-|-|
-| apigen | ✅ | ✅ | ✅ | ✅ |
-| [Supabase](https://supabase.com) | ⚠️ only Edge Functions | ⚠️ only RLS | ✅ | ⚠️ limited features |
-| [Hasura](https://hasura.io) | ❌ | ⚠️ limited to YAML | ✅ | ⚠️ limited features |
-| [Convex](https://convex.dev) | ✅ | ✅ | ❌ | ⚠️ limited features |
-| [PostgREST](https://postgres.org) | ❌ | ⚠️ only RLS | ✅ | ✅ |
-| Implement from scratch | ✅ | ⚠️ needs extensive tests | ❌ | ✅ |
+| Solution | apigen | [Supabase](https://supabase.com) | [Hasura](https://hasura.io) | [Convex](https://convex.dev) | [PostgREST](https://postgres.org) | Implement from scratch |
+|-|-|-|-|-|-|-|
+| Fully extensible | ✅ | ⚠️ only Edge Functions | ❌ | ✅ | ❌ | ✅ |
+| Customize access policies | ✅ | ⚠️ only RLS | ⚠️ limited to YAML | ✅ | ⚠️ only RLS | ⚠️ needs extensive tests |
+| DB schema is the API | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| Self-hostable | ✅ | ⚠️ limited features | ⚠️ limited features | ⚠️ limited features | ✅ | ✅ |
 
 ## Quickstart
 
