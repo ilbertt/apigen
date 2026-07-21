@@ -2,18 +2,17 @@
 
 > WinterTC-compatible REST API handlers from your Postgres schema
 
-apigen writes the CRUD; you write the auth. You choose which relations and columns
-to expose and authorize each operation in code — a SQL `USING` / `WITH CHECK`
-policy, plus optional hooks. Requests become PostgREST-style queries, compiled to
-parameterized SQL and run against a database you pass in.
+apigen generates [PostgREST](https://postgrest.org)-compatible REST handlers from your
+Postgres schema. You pick which relations and columns to expose, authorize each operation
+as ordinary code, and mount the result into your own server. apigen writes the CRUD; you
+write the auth.
 
-- **Runtime-agnostic.** `app.handle` is a `(Request) => Promise<Response>` on
-  Web-standard globals; mount it into any [WinterTC](https://wintertc.org/) server
-  (Bun, Node ≥18, Deno). No server is bundled.
-- **You own the connection.** apigen never opens one or takes a connection string —
-  you pass a live `db` (postgres.js, Bun.SQL, or an adapter).
-- **Zero runtime dependencies.** SQL is built with a vendored copy of
-  `sql-template-tag`; request values reach the database only as bound params.
+- **Runtime-agnostic.** `app.handle` is a Web-standard `(Request) => Promise<Response>` —
+  mount it into any [WinterTC](https://wintertc.org/) server (Bun, Node ≥18, Deno). No
+  server is bundled.
+- **You own the connection.** apigen never opens one; you pass a live `db` (postgres.js,
+  Bun.SQL, or an adapter).
+- **Zero runtime dependencies.** Request values reach the database only as bound params.
 
 ## Install
 
@@ -23,32 +22,41 @@ bun add @ilbertt/apigen
 
 ## Quick start
 
-**1. Generate the typed client** — point apigen at your running database:
+Generate a typed client from your running database:
 
 ```sh
 bunx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api.gen.ts
 ```
 
-> No running database? Generate from SQL migrations instead (needs the
-> `@electric-sql/pglite` dev dependency):
+> No running database? Generate from SQL migrations instead (needs `@electric-sql/pglite`):
 >
 > ```sh
 > bun add -d @electric-sql/pglite
 > bunx apigen gen --migrations ./migrations --out ./api.gen.ts
 > ```
 
-`api.gen.ts` is a committed file: the `catalog` (relation → column → pgType), row
-types, and a catalog-bound `Apigen` and `relation`. Authorization is your code, not
-generated.
+`api.gen.ts` is a committed file — the catalog (relation → column → pgType), row types, and
+a catalog-bound `Apigen` and `relation`. Authorization is your code, not generated. The
+snippets below build up a single file.
 
-**2. Write your policies.** A relation is a `.use()`-able module:
+**1. Expose a public relation.**
 
 ```ts
-// orders.ts
-import { relation } from './api.gen';
+import { Apigen, relation } from './api.gen';
+
+// A public, read-only catalog — no authorization needed.
+const products = relation('products').select({});
+```
+
+A relation with no `authorization` is public. Optional `beforeExecute` / `afterExecute`
+hooks (see [Authorization](#authorization)) let you observe or decorate each request.
+
+**2. Add access policies to a private relation.**
+
+```ts
 import { auth } from './auth'; // your code: (req) => Promise<User | null>
 
-export const orders = relation('orders')
+const orders = relation('orders')
   .select({
     authorization: async (req, { sql }) => {
       const user = await auth(req);
@@ -62,168 +70,103 @@ export const orders = relation('orders')
       if (!user) return false;
       return {
         policy: sql.withCheck`org_id = ${user.orgId}::uuid`,
-        allowedColumns: ['customer', 'amount', 'status', 'org_id'],
+        allowedColumns: ['customer', 'amount', 'org_id'],
       };
     },
   });
 // unregistered verbs (.update / .delete) are denied
 ```
 
-**3. Mount and serve:**
+Each operation is authorized on its own: return `false` for a 403, or a SQL policy that
+scopes the query to the caller. `allowedColumns` bounds what a read exposes and a write can
+touch.
+
+**3. Mount and serve.**
 
 ```ts
 import postgres from 'postgres';
-import { Apigen } from './api.gen';
-import { orders } from './orders';
 
-const app = new Apigen({ db: postgres(process.env.DATABASE_URL!) }).use(orders);
+const app = new Apigen({ db: postgres(process.env.DATABASE_URL!) })
+  .use(products)
+  .use(orders);
 
-Bun.serve({ port: 3000, fetch: app.handle });
-// Node:  a WinterTC http adapter over app.handle
-// Deno:  Deno.serve(app.handle)
+Bun.serve({ port: 3000, fetch: app.handle }); // Deno.serve(app.handle) / a Node adapter
 ```
+
+`app.handle` is a WinterTC `(Request) => Response`, so it drops into any compatible server.
+
+**4. Send requests.**
 
 ```sh
 curl 'http://localhost:3000/orders?status=eq.paid&order=amount.desc&limit=10' \
   -H 'authorization: Bearer …'
 ```
 
+Requests are PostgREST-style — the same wire format the Supabase client and PostgREST
+tooling speak.
+
 ## Authorization
 
-Each verb takes a config object:
-
-```ts
-.select({ authorization?, beforeExecute?, afterExecute? })
-```
-
-`authorization` decides who may run the operation and on which rows. Omit it and the
-operation is public (`USING true`, every column). When present:
+Each verb takes a config object — an optional `authorization` plus optional
+`beforeExecute` / `afterExecute` hooks. `authorization` is:
 
 ```ts
 (req, { sql }) => false | { policy, allowedColumns? }
 ```
 
-- `req` — the raw request. There is no resolved user; call your own auth helper.
-  Memoize it on the `Request` (e.g. a `WeakMap`) if you want it to run once.
-- `sql` — the clause builder for this op: `sql.using` on select/update/delete,
-  `sql.withCheck` on insert. The wrong one is a type error. `${values}` are bound
-  params; the rest of the fragment is trusted SQL, so subqueries and `EXISTS` work.
-- `policy` — a `USING` predicate (which rows the op may touch) or `WITH CHECK`
-  (which rows a write may produce). On update, `withCheck` defaults to `using`, so a
-  write can't move a row out of scope.
-- `allowedColumns` — column names, defaulting to all. The visible set for `?select=`
-  and filters on reads; the writable set on writes. Any other column is a 403.
-- `false` — denies the operation (403). The function may be async.
+- Omit it and the operation is public (`USING true`, every column).
+- `sql` builds the clause for this op — `sql.using` on select/update/delete, `sql.withCheck`
+  on insert (the wrong one is a type error). `${values}` are bound params; the rest is
+  trusted SQL, so subqueries and `EXISTS` work.
+- `policy` is a `USING` predicate (which rows the op may touch) or `WITH CHECK` (which rows a
+  write may produce).
+- `allowedColumns` bounds the visible set on reads and the writable set on writes; any other
+  column is a 403.
+- `false` denies the operation. Reads and deletes filter silently; writes reject rows that
+  fail `WITH CHECK`.
 
-Reads and deletes filter silently — out-of-scope rows are invisible. Writes reject
-rows that fail `WITH CHECK`.
+`beforeExecute({ req, op, relation })` runs before the query (logging/metrics);
+`afterExecute({ req, op, relation, response })` returns the `Response` to send. Neither sees
+rows.
 
-### Hooks
+## Queries and responses
 
-`beforeExecute` and `afterExecute` are optional per-op hooks, each taking one object:
+Requests are PostgREST-style and compile to parameterized SQL:
 
-- `beforeExecute({ req, op, relation })` — runs after routing, before the query.
-  Returns nothing; use it for logging or metrics. May be async.
-- `afterExecute({ req, op, relation, response })` — runs on a successful response and
-  returns the `Response` to send, mutated or replaced. It does not see rows.
+- **`select`** with renaming, casts, JSON paths, and aggregates; **filters** (`eq`, `in`,
+  `like`, `fts`, array/range ops, …) negatable with `not.` and combinable with `and` / `or`;
+  plus `order`, `limit`, `offset`. Filter values are cast to the column's type — a bad value
+  is a 400 that never reaches the database.
+- **Resource embedding** over foreign keys: `select=*,order_items(*)` nests a related
+  relation, whose own authorization applies.
+- **Methods → operations:** `GET` select, `POST` insert, `PUT` upsert, `PATCH` update,
+  `DELETE` delete.
+- **Responses match PostgREST byte-for-byte** — the JSON is rendered by Postgres. Reads
+  return an array plus a `Content-Range` header; `Prefer: count=exact` adds the total. Writes
+  default to `return=minimal`; `Prefer: return=representation` returns the rows. `Accept:
+  text/csv` and singular `application/vnd.pgrst.object+json` are supported. Errors use
+  PostgREST's `{ code, details, hint, message }` envelope.
 
-```ts
-import { relation } from './api.gen';
-
-export const products = relation('products').select({
-  beforeExecute: ({ op, relation }) => {
-    console.log(`Handling ${op} on ${relation}`);
-  },
-  afterExecute: ({ relation, response }) => {
-    response.headers.set('x-apigen-relation', relation);
-    return response;
-  },
-});
-```
-
-## Query parameters (PostgREST subset)
-
-`select` (with `alias:col` renaming, `col::type` casting, `col->k`/`col->>k` JSON paths,
-and aggregates `col.sum()`/`count()`/`avg()`/`max()`/`min()` — non-aggregate columns
-become the GROUP BY), the filters
-`eq neq gt gte lt lte in is isdistinct like ilike match imatch`,
-full-text `fts plfts phfts wfts` (with an optional `(config)`, e.g.
-`description=fts(english).red`), and array/range `cs cd ov sl sr nxr nxl adj` — each
-optionally negated with a `not.` prefix, e.g. `customer=not.eq.Alice`, and the
-comparison/pattern operators also take an `(any)`/`(all)` quantifier over a `{…}` list,
-e.g. `id=eq(any).{1,2,3}`. Conditions combine with the logical operators `and` / `or`
-(nestable, `not.`-negatable), e.g. `or=(status.eq.paid,amount.gt.100)`. Plus `order`
-(`asc`/`desc`, `nullsfirst`/`nullslast`), `limit`, `offset`. Filter values are cast to
-the column's catalog type; a value that doesn't fit (text for an `int8`, say) is a 400
-and never reaches the database.
-
-Foreign keys drive **resource embedding**: `select=*,order_items(*)` nests a related
-relation (one-to-many → array, many-to-one → object), with an optional
-`alias:relation(cols)`. The embedded relation must be exposed; its own authorization
-applies. `codegen` emits the `foreignKeys` it needs.
-
-Method → operation: `GET` select, `POST` insert, `PUT` upsert, `PATCH` update, `DELETE`
-delete. `HEAD` runs the select for its headers but returns no body; `OPTIONS` answers
-`200` with an `Allow` header listing the methods the relation's mounts permit.
-
-## Responses
-
-Responses match PostgREST byte-for-byte over the supported surface — the JSON is
-rendered by Postgres itself, so `numeric` keeps its scale, `int8` comes back as a
-number, and `timestamptz` as ISO-8601.
-
-- **Reads** return a JSON array plus a `Content-Range` header (`0-9/*`). `Prefer:
-  count=exact` fills in the total (`0-9/42`) and answers `206` when the page is partial.
-  Paginate with `limit`/`offset` or a `Range: 0-9` header (`limit`/`offset` win if both).
-- **Writes** default to `Prefer: return=minimal`: `POST` → `201` empty, `PATCH`/`DELETE`
-  → `204` empty. Send `Prefer: return=representation` to get the affected rows back, or
-  `Prefer: return=headers-only` for a `POST` that answers `201` + a `Location` header
-  pointing at the new row's primary key.
-- **Upsert**: `POST` with `Prefer: resolution=merge-duplicates` (or `ignore-duplicates`)
-  and an optional `on_conflict=<cols>` (defaults to the primary key) — `200` when it
-  updated an existing row, `201` when it inserted. `PUT ?<pk>=eq.<v>` upserts a single row
-  keyed by its whole primary key.
-- **`columns=<cols>`** on an insert fixes the column set — body keys outside it are
-  ignored and the rest take their database defaults. `Prefer: missing=default` fills a
-  column that's in the set but absent from a row with its database default (not `null`).
-- **Singular**: `Accept: application/vnd.pgrst.object+json` returns a lone object, or
-  `406` (`PGRST116`) when the result isn't exactly one row.
-- **CSV**: `Accept: text/csv` returns the rows as CSV (header row + text values, RFC-4180
-  quoting, `null` → empty) instead of JSON. A `Content-Type: text/csv` insert body works the
-  other way — the header names the columns and each line is a row.
-- **Errors** use PostgREST's envelope, `{ code, details, hint, message }`, passing the
-  Postgres `SQLSTATE` through on database errors.
+See the [examples](https://github.com/ilbertt/apigen/tree/main/examples) for runnable setups
+covering each of these.
 
 ## Functions
 
-Expose a Postgres function as an RPC endpoint with `func()`. A call is
-`POST /rpc/<name>` with a JSON body of arguments; apigen binds each argument by name
-and casts it to the argument's type, so order is irrelevant and omitted arguments fall
-back to the function's defaults.
+Expose a Postgres function as `POST /rpc/<name>` with `func()`. Arguments are bound by name
+and cast to their types, so order is irrelevant and omitted args fall back to the function's
+defaults:
 
 ```ts
 import { func } from './api.gen';
 
-// public — `.execute({})` opts the function in; an unregistered function denies calls
-export const greet = func('greet').execute({});
-
-// gated — a function's authorization is a coarse boolean: may this caller run it?
+export const greet = func('greet').execute({}); // public
 export const publish = func('publish_article').execute({
-  authorization: (req) => isAdmin(req), // false → 403; may be async
+  authorization: (req) => isAdmin(req), // coarse gate: false → 403
 });
 ```
 
-```sh
-curl -X POST http://localhost:3000/rpc/greet \
-  -H 'content-type: application/json' -d '{"name":"World"}'
-```
-
-A function has no rows or columns to scope, so its authorization is a coarse gate
-rather than a `USING`/`WITH CHECK` policy — row-level rules belong on relations (or
-inside the function's own SQL). The `beforeExecute`/`afterExecute` hooks work the
-same, with a `{ req, functionName }` context. The result of `select * from fn(...)` is
-returned as rows, so scalar, composite, and set-returning functions all come back as a
-JSON array. Functions are called with `POST` only.
+A function's authorization is a coarse boolean — row-level rules belong on relations. The
+`beforeExecute` / `afterExecute` hooks work the same, with a `{ req, functionName }` context.
 
 ## Database
 
@@ -234,70 +177,20 @@ new Apigen({ db: sql });        // postgres.js or Bun.SQL, detected by shape
 new Apigen({ db: myAdapter });  // an Adapter from createAdapter()
 ```
 
-The adapter contract is just execution:
-
-```ts
-interface Adapter {
-  execute(q: { text: string; values: unknown[] }): Promise<unknown[]>;
-  transaction<T>(fn: (tx: Adapter) => Promise<T>): Promise<T>;
-}
-```
-
 `createAdapter` and the built-in postgres.js/Bun.SQL adapter live in
-`@ilbertt/apigen/adapters`. Each request runs in one transaction. The database
-speaks TCP, so apigen runs on server runtimes, not edge/Workers.
+`@ilbertt/apigen/adapters`. Each request runs in one transaction. The database speaks TCP,
+so apigen runs on server runtimes, not edge/Workers.
 
-## Schemas
+## More
 
-apigen exposes one schema by default. To expose more, pass `schemas` and mount a
-relation under one with `relation(name, { schema })`:
-
-```ts
-const app = new Apigen({
-  db: sql,
-  catalog, // the default schema (usually `public`)
-  schemas: { analytics: { catalog: analyticsCatalog } },
-})
-  .use(relation('orders').select({}))
-  .use(relation('events', { schema: 'analytics' }).select({}));
-```
-
-Clients pick the schema per request, exactly like PostgREST: `Accept-Profile: <schema>`
-on reads, `Content-Profile: <schema>` on writes. The first schema is the default; every
-response echoes `Content-Profile`, and an unknown schema is a `406`. Set `defaultSchema`
-if your default isn't `public`. `apigen gen` emits the default schema's catalog today —
-hand-write (or generate and merge) the extra schemas' catalogs.
-
-## CLI
-
-`apigen gen` writes `api.gen.ts` from either a running Postgres (`--database-url`)
-or SQL migrations (`--migrations`, which needs `@electric-sql/pglite`). Run it with
-`--help` for the current flags:
-
-```sh
-bunx apigen gen --help
-```
-
-## OpenAPI
-
-Provide the `openapi` option (even `{}`) to serve a Swagger 2.0 document describing the
-mounted relations at `GET /openapi` (honor `Accept-Profile` to pick a schema); omit the
-option and `/openapi` is not served. It lives at `/openapi`, not PostgREST's `/`, whose
-document embeds PostgREST's own version string. The option's fields override the `info`
-block — `version` is omitted unless you set it:
-
-```ts
-new Apigen({ db, catalog, openapi: { title: 'My API', version: '1.0.0' } });
-```
-
-## Not included (yet)
-
-Divergent `withCheck`, a `pg` adapter, and SQLite/D1 dialects are out of scope for now.
-apigen also enforces `allowedColumns` up front (a `403`) instead of deferring to Postgres,
-so an unknown or forbidden column is rejected before the query runs.
+- **Multiple schemas** — pass `schemas` and mount with `relation(name, { schema })`; clients
+  pick a schema per request with `Accept-Profile` (reads) / `Content-Profile` (writes).
+- **OpenAPI** — pass the `openapi` option (even `{}`) to serve a Swagger 2.0 document at
+  `GET /openapi`.
+- **CLI** — `apigen gen` writes `api.gen.ts` from a running database or SQL migrations. Run
+  `bunx apigen gen --help` for the flags.
 
 ## License
 
 Unlicense. Bundles a vendored copy of
-[`sql-template-tag`](https://github.com/blakeembrey/sql-template-tag) (MIT) — see
-`NOTICE`.
+[`sql-template-tag`](https://github.com/blakeembrey/sql-template-tag) (MIT) — see `NOTICE`.

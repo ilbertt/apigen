@@ -120,13 +120,15 @@ Bun.serve({ fetch: app.handle });
 
 Bring your own database client — apigen doesn't own the connection. `app.handle` is a standard WinterTC `(Request) => Response`, so it runs on any compatible runtime or drops into your existing server.
 
-Send PostgREST-style requests:
+**4. Send requests.**
 
 ```bash
 curl 'http://localhost:3000/products?select=title,price&order=price.desc'
 
 curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 ```
+
+Requests are PostgREST-style — the same wire format the Supabase client and PostgREST tooling speak.
 
 ## Examples
 
