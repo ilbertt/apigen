@@ -52,13 +52,12 @@ npx apigen gen --database-url postgres://user:pw@localhost:5432/app --out src/ap
 > npx apigen gen --migrations src/db/migrations --out src/api.gen.ts
 > ```
 
-Expose the tables you want, each with its own policy:
+Now expose the tables you want, each with its own policy. The snippets below build up a single file.
+
+**1. Expose a public relation.**
 
 ```ts
-import postgres from 'postgres';
 import { Apigen, relation } from './api.gen';
-
-const db = postgres('postgres://...');
 
 // A public, read-only catalog — no authorization needed.
 const products = relation('products')
@@ -71,7 +70,11 @@ const products = relation('products')
       return response;
     },
   });
+```
 
+**2. Add access policies to a private relation.**
+
+```ts
 // Private: every request is scoped to the caller's org.
 const orders = relation('orders')
   .select({
@@ -98,20 +101,29 @@ const orders = relation('orders')
     },
   });
 // no .update / .delete → those operations return 403
+```
+
+**3. Mount and serve.**
+
+```ts
+import { db } from './your-db-client';
 
 const app = new Apigen({ db }).use(products).use(orders);
 
-// app.handle is a WinterTC (Request) => Response
+// app.handle is a WinterTC (Request) => Response — mount it into any server
 Bun.serve({ fetch: app.handle });
 ```
 
-Send PostgREST-style requests:
+**4. Send requests.**
 
 ```bash
+# the exposed API is PostgREST-compatible
 curl 'http://localhost:3000/products?select=title,price&order=price.desc'
 
 curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'
 ```
+
+Requests are PostgREST-style — the same wire format the Supabase client and PostgREST tooling speak.
 
 ## Examples
 
