@@ -17,7 +17,7 @@ write the auth.
 ## Install
 
 ```sh
-bun add @ilbertt/apigen
+npm i @ilbertt/apigen
 ```
 
 ## Quick start
@@ -25,14 +25,14 @@ bun add @ilbertt/apigen
 Generate a typed client from your running database:
 
 ```sh
-bunx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api.gen.ts
+npx apigen gen --database-url postgres://user:pw@localhost:5432/app --out ./api.gen.ts
 ```
 
 > No running database? Generate from SQL migrations instead (needs `@electric-sql/pglite`):
 >
 > ```sh
-> bun add -d @electric-sql/pglite
-> bunx apigen gen --migrations ./migrations --out ./api.gen.ts
+> npm i -D @electric-sql/pglite
+> npx apigen gen --migrations ./migrations --out ./api.gen.ts
 > ```
 
 `api.gen.ts` is a committed file — the catalog (relation → column → pgType), row types, and
@@ -178,7 +178,7 @@ so apigen runs on server runtimes, not edge/Workers.
 - **OpenAPI** — pass the `openapi` option (even `{}`) to serve a Swagger 2.0 document at
   `GET /openapi`.
 - **CLI** — `apigen gen` writes `api.gen.ts` from a running database or SQL migrations. Run
-  `bunx apigen gen --help` for the flags.
+  `npx apigen gen --help` for the flags.
 
 ## License
 
