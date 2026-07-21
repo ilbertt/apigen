@@ -117,7 +117,7 @@ Bun.serve({ fetch: app.handle });
 **4. Send requests.**
 
 ```bash
-# PostgREST-compatible — the Supabase client and PostgREST tooling speak the same wire format
+# the exposed API is PostgREST-compatible
 curl 'http://localhost:3000/products?select=title,price&order=price.desc'
 
 curl -X POST http://localhost:3000/orders -H 'authorization: Bearer ...'

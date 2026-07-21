@@ -90,7 +90,7 @@ Bun.serve({ port: 3000, fetch: app.handle });
 **4. Send requests.**
 
 ```sh
-# PostgREST-compatible — the Supabase client and PostgREST tooling speak the same wire format
+# the exposed API is PostgREST-compatible
 curl 'http://localhost:3000/orders?status=eq.paid&order=amount.desc&limit=10' \
   -H 'authorization: Bearer …'
 ```
